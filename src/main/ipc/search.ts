@@ -156,13 +156,14 @@ async function handleFindSessionsByPartialId(
   fragment: string
 ): Promise<FindSessionsByPartialIdResult> {
   try {
-    if (!isSessionIdFragment(fragment)) {
+    const trimmed = typeof fragment === 'string' ? fragment.trim() : '';
+    if (!isSessionIdFragment(trimmed)) {
       logger.error(`find-sessions-by-partial-id rejected: invalid fragment`);
       return { found: false, results: [] };
     }
 
     const { projectScanner } = registry.getActive();
-    return await projectScanner.findSessionsByPartialId(fragment);
+    return await projectScanner.findSessionsByPartialId(trimmed);
   } catch (error) {
     logger.error(`Error in find-sessions-by-partial-id for ${fragment}:`, error);
     return { found: false, results: [] };

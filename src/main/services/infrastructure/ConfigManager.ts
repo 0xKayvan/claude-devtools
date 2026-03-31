@@ -247,7 +247,7 @@ const DEFAULT_CONFIG: AppConfig = {
   general: {
     launchAtLogin: false,
     showDockIcon: true,
-    theme: 'dark',
+    theme: 'system',
     defaultTab: 'dashboard',
     claudeRootPath: null,
     autoExpandAIGroups: false,

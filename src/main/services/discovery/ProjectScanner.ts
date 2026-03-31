@@ -1200,17 +1200,15 @@ export class ProjectScanner {
             return (await this.fsProvider.exists(sessionPath)) ? dir.name : null;
           })
         );
-        const matchedProjectId = settled
-          .filter((r): r is PromiseFulfilledResult<string | null> => r.status === 'fulfilled')
-          .map((r) => r.value)
-          .find((v) => v !== null);
-
-        if (matchedProjectId) {
-          const session = await this.getSessionWithOptions(matchedProjectId, sessionId, {
-            metadataLevel: 'light',
-          });
-          if (session) {
-            return { found: true, projectId: matchedProjectId, session };
+        for (const result of settled) {
+          if (result.status === 'fulfilled' && result.value) {
+            const matchedProjectId = result.value;
+            const session = await this.getSessionWithOptions(matchedProjectId, sessionId, {
+              metadataLevel: 'light',
+            });
+            if (session) {
+              return { found: true, projectId: matchedProjectId, session };
+            }
           }
         }
       }
