@@ -207,12 +207,9 @@ end if`
   private startBlinking(projectName: string, sessionCount: number): void {
     if (this.blinkController.isBlinking()) return;
 
-    this.blinkController.start(this.settings.blinkIntervalMs, (isOn: boolean) => {
-      if (isOn) {
-        this.renderKey('waiting-for-input', projectName, sessionCount);
-      } else {
-        this.renderKey('disconnected', projectName, sessionCount);
-      }
+    // Soft pulse: sine wave over ~2 seconds
+    this.blinkController.startPulse(this.settings.blinkIntervalMs * 4, (brightness: number) => {
+      this.renderKey('waiting-for-input', projectName, sessionCount, brightness);
     });
 
     this.renderKey('waiting-for-input', projectName, sessionCount);
@@ -221,7 +218,8 @@ end if`
   private async renderKey(
     state: SessionActivityState | 'disconnected',
     projectName: string,
-    sessionCount: number
+    sessionCount: number,
+    brightness?: number
   ): Promise<void> {
     try {
       const image = await this.renderer.render({
@@ -229,6 +227,7 @@ end if`
         state,
         sessionCount,
         settings: this.settings,
+        brightness,
       });
 
       if (image !== this.lastRenderedImage) {

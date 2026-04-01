@@ -15,18 +15,20 @@ export interface RenderOptions {
   state: SessionActivityState | 'disconnected';
   sessionCount: number;
   settings: KeySettings;
+  /** Optional brightness multiplier for pulse effect (0-1). Default 1. */
+  brightness?: number;
 }
 
 export class KeyRenderer {
   async render(options: RenderOptions): Promise<string> {
-    const { projectName, state, sessionCount, settings } = options;
+    const { projectName, state, sessionCount, settings, brightness = 1 } = options;
     const theme = getThemeForState(state, settings.colors);
 
     const canvas = createCanvas(KEY_SIZE, KEY_SIZE);
     const ctx = canvas.getContext('2d');
 
-    // Background
-    ctx.fillStyle = theme.backgroundColor;
+    // Background — apply brightness by darkening the color
+    ctx.fillStyle = this.adjustBrightness(theme.backgroundColor, brightness);
     ctx.fillRect(0, 0, KEY_SIZE, KEY_SIZE);
 
     // Project name
@@ -67,6 +69,16 @@ export class KeyRenderer {
 
     const buffer = canvas.toBuffer('image/png');
     return buffer.toString('base64');
+  }
+
+  private adjustBrightness(hex: string, brightness: number): string {
+    // Parse hex color and multiply RGB by brightness
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
+    if (!m) return hex;
+    const r = Math.round(parseInt(m[1], 16) * brightness);
+    const g = Math.round(parseInt(m[2], 16) * brightness);
+    const b = Math.round(parseInt(m[3], 16) * brightness);
+    return `rgb(${r},${g},${b})`;
   }
 
   private truncateText(
