@@ -1,24 +1,15 @@
-// streamdeck-plugin/src/transport/SseTransport.ts
-import { EventSource as EventSourceLib } from 'eventsource';
 import type { StateTransport, ActionResult } from './StateTransport.js';
 import type { SessionState } from '../config/defaults.js';
 
-const BASE_BACKOFF_MS = 1000;
-const MAX_BACKOFF_MS = 30_000;
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 2000;
+const RECONNECT_DELAY_MS = 5000;
 
-// Use native EventSource if available (browser/StreamDeck runtime), otherwise fall back to the
-// eventsource npm package (Node.js / test environment).
-const EventSourceImpl: typeof EventSource =
-  typeof EventSource !== 'undefined'
-    ? EventSource
-    : (EventSourceLib as unknown as typeof EventSource);
-
+/**
+ * HTTP polling transport. Polls /api/streamdeck/state at a fixed interval.
+ * Simple and reliable — works in all Node.js runtimes including StreamDeck's.
+ */
 export class SseTransport implements StateTransport {
-  private eventSource: EventSource | null = null;
   private connected = false;
-  private reconnectAttempt = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private baseUrl = '';
   private stateCallbacks: ((sessions: SessionState[]) => void)[] = [];
@@ -26,23 +17,11 @@ export class SseTransport implements StateTransport {
 
   connect(url: string): void {
     this.baseUrl = url;
-    this.reconnectAttempt = 0;
-    this.connectSSE();
+    this.startPolling();
   }
 
   disconnect(): void {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
+    this.stopPolling();
     this.setConnected(false);
   }
 
@@ -73,69 +52,17 @@ export class SseTransport implements StateTransport {
 
   /** Exposed for testing */
   calculateBackoff(attempt: number): number {
-    return Math.min(BASE_BACKOFF_MS * Math.pow(2, attempt), MAX_BACKOFF_MS);
-  }
-
-  private connectSSE(): void {
-    try {
-      this.eventSource = new EventSourceImpl(`${this.baseUrl}/api/streamdeck/events`);
-
-      this.eventSource.addEventListener('session-state-change', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-          const sessions = data.sessions as SessionState[];
-          for (const cb of this.stateCallbacks) {
-            cb(sessions);
-          }
-        } catch {
-          // Ignore malformed events
-        }
-      });
-
-      this.eventSource.onopen = () => {
-        this.reconnectAttempt = 0;
-        this.setConnected(true);
-        this.stopPolling();
-      };
-
-      this.eventSource.onerror = () => {
-        this.eventSource?.close();
-        this.eventSource = null;
-        this.setConnected(false);
-        this.startPolling();
-        this.scheduleReconnect();
-      };
-    } catch {
-      this.setConnected(false);
-      this.startPolling();
-      this.scheduleReconnect();
-    }
-  }
-
-  private scheduleReconnect(): void {
-    if (this.reconnectTimer) return;
-    const delay = this.calculateBackoff(this.reconnectAttempt);
-    this.reconnectAttempt++;
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connectSSE();
-    }, delay);
+    return Math.min(1000 * Math.pow(2, attempt), 30_000);
   }
 
   private startPolling(): void {
     if (this.pollTimer) return;
-    this.pollTimer = setInterval(async () => {
-      try {
-        const response = await fetch(`${this.baseUrl}/api/streamdeck/state`);
-        if (response.ok) {
-          const sessions = (await response.json()) as SessionState[];
-          for (const cb of this.stateCallbacks) {
-            cb(sessions);
-          }
-        }
-      } catch {
-        // Polling failure — SSE reconnect will handle recovery
-      }
+
+    // Immediate first poll
+    this.poll();
+
+    this.pollTimer = setInterval(() => {
+      this.poll();
     }, POLL_INTERVAL_MS);
   }
 
@@ -143,6 +70,23 @@ export class SseTransport implements StateTransport {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+  }
+
+  private async poll(): Promise<void> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/streamdeck/state`);
+      if (response.ok) {
+        const sessions = (await response.json()) as SessionState[];
+        this.setConnected(true);
+        for (const cb of this.stateCallbacks) {
+          cb(sessions);
+        }
+      } else {
+        this.setConnected(false);
+      }
+    } catch {
+      this.setConnected(false);
     }
   }
 
