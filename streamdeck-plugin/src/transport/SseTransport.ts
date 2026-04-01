@@ -1,12 +1,12 @@
+import http from 'node:http';
 import type { StateTransport, ActionResult } from './StateTransport.js';
 import type { SessionState } from '../config/defaults.js';
 
 const POLL_INTERVAL_MS = 2000;
-const RECONNECT_DELAY_MS = 5000;
 
 /**
- * HTTP polling transport. Polls /api/streamdeck/state at a fixed interval.
- * Simple and reliable — works in all Node.js runtimes including StreamDeck's.
+ * HTTP polling transport using Node's built-in http module.
+ * Polls /api/streamdeck/state at a fixed interval.
  */
 export class SseTransport implements StateTransport {
   private connected = false;
@@ -34,16 +34,40 @@ export class SseTransport implements StateTransport {
   }
 
   async sendAction(sessionId: string, action: string): Promise<ActionResult> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/streamdeck/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, action }),
+    return new Promise((resolve) => {
+      const body = JSON.stringify({ sessionId, action });
+      const url = new URL(`${this.baseUrl}/api/streamdeck/action`);
+      const req = http.request(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body),
+          },
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data) as ActionResult);
+            } catch {
+              resolve({ success: false, error: 'Invalid response' });
+            }
+          });
+        }
+      );
+      req.on('error', (err) => {
+        resolve({ success: false, error: String(err) });
       });
-      return (await response.json()) as ActionResult;
-    } catch (error) {
-      return { success: false, error: String(error) };
-    }
+      req.write(body);
+      req.end();
+    });
   }
 
   isConnected(): boolean {
@@ -57,13 +81,8 @@ export class SseTransport implements StateTransport {
 
   private startPolling(): void {
     if (this.pollTimer) return;
-
-    // Immediate first poll
     this.poll();
-
-    this.pollTimer = setInterval(() => {
-      this.poll();
-    }, POLL_INTERVAL_MS);
+    this.pollTimer = setInterval(() => this.poll(), POLL_INTERVAL_MS);
   }
 
   private stopPolling(): void {
@@ -73,21 +92,35 @@ export class SseTransport implements StateTransport {
     }
   }
 
-  private async poll(): Promise<void> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/streamdeck/state`);
-      if (response.ok) {
-        const sessions = (await response.json()) as SessionState[];
-        this.setConnected(true);
-        for (const cb of this.stateCallbacks) {
-          cb(sessions);
-        }
-      } else {
-        this.setConnected(false);
+  private poll(): void {
+    const url = new URL(`${this.baseUrl}/api/streamdeck/state`);
+    const req = http.get(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const sessions = JSON.parse(data) as SessionState[];
+            this.setConnected(true);
+            for (const cb of this.stateCallbacks) {
+              cb(sessions);
+            }
+          } catch {
+            this.setConnected(false);
+          }
+        });
       }
-    } catch {
+    );
+    req.on('error', () => {
       this.setConnected(false);
-    }
+    });
   }
 
   private setConnected(value: boolean): void {
