@@ -58,6 +58,7 @@ process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception in main process:', error);
 });
 
+import { configManagerPromise } from './services/infrastructure/ConfigManager';
 import { HttpServer } from './services/infrastructure/HttpServer';
 import {
   configManager,
@@ -333,10 +334,14 @@ function initializeServices(): void {
   });
 
   // Start HTTP server if enabled in config
-  const appConfig = configManager.getConfig();
-  if (appConfig.httpServer?.enabled) {
-    void startHttpServer(handleModeSwitch);
-  }
+  // configManager may not have loaded from disk yet (async init race),
+  // so await the init promise before reading config
+  void configManagerPromise.then(() => {
+    const appConfig = configManager.getConfig();
+    if (appConfig.httpServer?.enabled) {
+      void startHttpServer(handleModeSwitch);
+    }
+  });
 
   logger.info('Services initialized successfully');
 }
