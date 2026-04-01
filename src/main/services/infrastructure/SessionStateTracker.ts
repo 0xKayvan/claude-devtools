@@ -23,31 +23,49 @@ export class SessionStateTracker extends EventEmitter {
   ) {
     super();
     this.fileWatcher.on('file-change', this.handleFileChange.bind(this));
+
+    // Initial scan — populate state for all existing sessions
+    this.performInitialScan().catch((err) => {
+      console.error('SessionStateTracker: initial scan failed:', err);
+    });
+  }
+
+  /**
+   * Scan all projects and sessions to build initial state map.
+   */
+  private async performInitialScan(): Promise<void> {
+    try {
+      const projects = await this.projectScanner.scan();
+      for (const project of projects) {
+        for (const sessionId of project.sessions) {
+          await this.updateSessionState(sessionId, project.id);
+        }
+      }
+      if (this.states.size > 0) {
+        this.emit('state-change', this.getStates());
+      }
+    } catch (err) {
+      console.error('SessionStateTracker: initial scan error:', err);
+    }
   }
 
   /**
    * Detect the activity state of a session from its messages.
-   * Public for testing — the main entry point is the file-change event handler.
+   * Public for testing.
    */
   detectActivityState(messages: ParsedMessage[]): SessionActivityState {
     if (messages.length === 0) return 'idle';
 
-    // Check if session has ongoing activity using existing logic
     const isOngoing = checkMessagesOngoing(messages);
     if (!isOngoing) return 'idle';
 
     // Session is ongoing — determine if working or waiting for input
-    // Walk backwards to find the last assistant message
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-
-      // Skip non-assistant messages (tool results are user messages with isMeta: true)
       if (msg.type !== 'assistant') continue;
 
-      // Check if this assistant message has tool calls without results
       if (msg.toolCalls && msg.toolCalls.length > 0) {
         const pendingToolCalls = msg.toolCalls.filter((tc) => {
-          // Look for a matching tool_result in subsequent messages
           const hasResult = messages
             .slice(i + 1)
             .some((subsequent) => subsequent.toolResults?.some((tr) => tr.toolUseId === tc.id));
@@ -59,8 +77,6 @@ export class SessionStateTracker extends EventEmitter {
         }
       }
 
-      // If the last assistant message is just text with no tool calls,
-      // and session is ongoing, it's still working (streaming text)
       break;
     }
 
@@ -69,54 +85,56 @@ export class SessionStateTracker extends EventEmitter {
 
   private async handleFileChange(event: FileChangeEvent): Promise<void> {
     if (this.disposed) return;
+    if (!event.sessionId) return;
+
     if (event.type === 'unlink') {
-      if (event.sessionId) this.removeSession(event.sessionId);
+      this.removeSession(event.sessionId);
       return;
     }
 
-    const sessionId = event.sessionId;
-    if (!sessionId) return;
-
     // Debounce per session
-    const existing = this.debounceTimers.get(sessionId);
+    const existing = this.debounceTimers.get(event.sessionId);
     if (existing) clearTimeout(existing);
 
     this.debounceTimers.set(
-      sessionId,
+      event.sessionId,
       setTimeout(() => {
-        this.debounceTimers.delete(sessionId);
-        this.updateSessionState(sessionId, event.projectId).catch((err) => {
-          console.error(`Error updating state for session ${sessionId}:`, err);
+        this.debounceTimers.delete(event.sessionId!);
+        this.updateSessionState(event.sessionId!, event.projectId).catch((err) => {
+          console.error(`Error updating state for session ${event.sessionId}:`, err);
         });
       }, DEBOUNCE_MS)
     );
   }
 
-  private async updateSessionState(sessionId: string, _projectId?: string): Promise<void> {
+  private async updateSessionState(sessionId: string, projectId?: string): Promise<void> {
     if (this.disposed) return;
 
     try {
-      const messages = await (
-        this.sessionParser as unknown as {
-          parseSessionMessages: (id: string) => Promise<ParsedMessage[]>;
-        }
-      ).parseSessionMessages(sessionId);
-      const state = this.detectActivityState(messages);
-      const project = (
-        this.projectScanner as unknown as {
-          getProjectForSession: (id: string) => { path: string; name: string } | null;
-        }
-      ).getProjectForSession(sessionId);
+      // Resolve projectId if not provided
+      let resolvedProjectId = projectId;
+      if (!resolvedProjectId) {
+        const projects = await this.projectScanner.scan();
+        const match = projects.find((p) => p.sessions.includes(sessionId));
+        resolvedProjectId = match?.id;
+      }
 
+      if (!resolvedProjectId) return;
+
+      // Parse the session to get messages
+      const parsedSession = await this.sessionParser.parseSession(resolvedProjectId, sessionId);
+      const state = this.detectActivityState(parsedSession.messages);
+
+      // Get project info
+      const project = await this.projectScanner.getProject(resolvedProjectId);
       const projectPath = project?.path ?? '';
       const projectName = project?.name ?? 'Unknown';
 
       // Count active sessions in the same project
-      const sessionCount = project
-        ? [...this.states.values()].filter(
-            (s) => s.projectPath === projectPath && s.state !== 'idle'
-          ).length + (state !== 'idle' ? 1 : 0)
-        : 1;
+      const activeInProject = [...this.states.values()].filter(
+        (s) => s.projectPath === projectPath && s.sessionId !== sessionId && s.state !== 'idle'
+      ).length;
+      const sessionCount = activeInProject + (state !== 'idle' ? 1 : 0);
 
       const prev = this.states.get(sessionId);
       const next: SessionState = {
@@ -124,20 +142,18 @@ export class SessionStateTracker extends EventEmitter {
         projectPath,
         projectName,
         state,
-        sessionCount,
+        sessionCount: Math.max(sessionCount, 1),
         updatedAt: Date.now(),
       };
 
-      // Only emit if state actually changed
       if (prev?.state !== next.state) {
         this.states.set(sessionId, next);
         this.emit('state-change', this.getStates());
       } else {
-        // Update timestamp even if state didn't change
         this.states.set(sessionId, next);
       }
     } catch (err) {
-      console.error(`Failed to update session state for ${sessionId}:`, err);
+      // Session may have been deleted or be unparseable — skip silently
     }
   }
 
