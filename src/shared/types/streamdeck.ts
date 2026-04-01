@@ -4,6 +4,7 @@ export interface SessionState {
   sessionId: string;
   projectPath: string;
   projectName: string;
+  sessionTitle: string;
   state: SessionActivityState;
   sessionCount: number;
   updatedAt: number;

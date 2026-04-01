@@ -141,6 +141,13 @@ export class SessionStateTracker extends EventEmitter {
       const projectPath = project?.path ?? '';
       const projectName = project?.name ?? 'Unknown';
 
+      // Extract session title from first real user message
+      const firstUserMsg = parsedSession.messages.find(
+        (m) => m.type === 'user' && !m.isMeta && typeof m.content === 'string'
+      );
+      const sessionTitle =
+        typeof firstUserMsg?.content === 'string' ? firstUserMsg.content.slice(0, 120) : '';
+
       const activeInProject = [...this.states.values()].filter(
         (s) => s.projectPath === projectPath && s.sessionId !== sessionId && s.state !== 'idle'
       ).length;
@@ -151,6 +158,7 @@ export class SessionStateTracker extends EventEmitter {
         sessionId,
         projectPath,
         projectName,
+        sessionTitle,
         state,
         sessionCount: Math.max(sessionCount, 1),
         updatedAt: Date.now(),

@@ -137,78 +137,39 @@ function handleAction(
   if (action === 'open-terminal') {
     if (process.platform === 'darwin') {
       const { shell } = require('electron') as typeof import('electron');
-      const { execSync } = require('child_process') as typeof import('child_process');
+      const { exec } = require('child_process') as typeof import('child_process');
 
       // Activate Ghostty
       shell.openPath('/Applications/Ghostty.app');
 
-      // Find the correct tab by matching claude process CWD → TTY → tab index
+      // Match Ghostty tab by session title (from first user message)
       const states = services.sessionStateTracker.getStates();
       const session = states.find((s) => s.sessionId === sessionId);
-      const projectPath = session?.projectPath ?? '';
+      const title = session?.sessionTitle ?? '';
 
-      if (projectPath) {
-        try {
-          // Find claude process with matching CWD and get its TTY
-          const psOut = execSync('ps -eo pid,tty,command | grep -E "[c]laude$|[C]laude$"', {
-            encoding: 'utf8',
-            timeout: 2000,
-          }).trim();
+      if (title) {
+        // Extract first few words as search term (tab names are truncated)
+        const searchWords = title.split(/\s+/).slice(0, 4).join(' ');
+        const escaped = searchWords.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-          let targetTty = '';
-          for (const line of psOut.split('\n')) {
-            const m = /^(\d+)\s+(ttys\d+)/.exec(line.trim());
-            if (!m) continue;
-            try {
-              const cwd = execSync(`lsof -p ${m[1]} -Fn 2>/dev/null | grep '^n/' | head -1`, {
-                encoding: 'utf8',
-                timeout: 2000,
-              })
-                .trim()
-                .replace(/^n/, '');
-              if (cwd === projectPath) {
-                targetTty = m[2];
-                break;
-              }
-            } catch {
-              continue;
-            }
-          }
-
-          if (targetTty) {
-            // Map TTYs to tab indices via login shell processes
-            const loginOut = execSync(
-              'ps -eo pid,ppid,tty,command | grep "[l]ogin.*zsh\\|[l]ogin.*bash"',
-              { encoding: 'utf8', timeout: 2000 }
-            ).trim();
-
-            const tabTtys: string[] = [];
-            for (const line of loginOut.split('\n')) {
-              const m = /^\d+\s+\d+\s+(ttys\d+)/.exec(line.trim());
-              if (m && !tabTtys.includes(m[1])) tabTtys.push(m[1]);
-            }
-
-            const tabIndex = tabTtys.indexOf(targetTty);
-            if (tabIndex >= 0) {
-              // Use Cmd+N keyboard shortcut to switch tabs (1-indexed, max 9)
-              const tabNum = tabIndex + 1;
-              if (tabNum <= 9) {
-                setTimeout(() => {
-                  try {
-                    execSync(
-                      `osascript -e 'tell application "Ghostty" to activate' -e 'delay 0.1' -e 'tell application "System Events" to keystroke "${tabNum}" using command down'`,
-                      { timeout: 3000 }
-                    );
-                  } catch {
-                    /* tab switch failed */
-                  }
-                }, 200);
-              }
-            }
-          }
-        } catch {
-          /* process lookup failed — Ghostty is at least in front */
-        }
+        setTimeout(() => {
+          const script = `
+tell application "Ghostty"
+  activate
+  tell first window
+    repeat with i from 1 to count of every tab
+      if name of tab i contains "${escaped}" then
+        -- Use System Events keystroke to switch tab
+        tell application "System Events"
+          keystroke (i as string) using command down
+        end tell
+        return
+      end if
+    end repeat
+  end tell
+end tell`;
+          exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 3000 }, () => {});
+        }, 300);
       }
     }
     return { success: true };
