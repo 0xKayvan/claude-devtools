@@ -42,6 +42,6 @@ export const STREAMDECK_DEFAULTS: StreamDeckConfig = {
     staleSessionTimeoutMs: 300_000,
   },
   actions: {
-    openTerminalCommand: process.platform === 'darwin' ? 'open -a Terminal' : 'x-terminal-emulator',
+    openTerminalCommand: '',
   },
 };
