@@ -12,6 +12,7 @@ import { DEFAULT_KEY_SETTINGS } from './config/defaults.js';
 import type { JsonObject } from '@elgato/utils';
 
 const transport = new SseTransport();
+transport.setLogger((msg) => streamDeck.logger.info(msg));
 const renderer = new KeyRenderer();
 
 // Map of action context IDs to SessionMonitor instances

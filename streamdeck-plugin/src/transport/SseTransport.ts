@@ -17,6 +17,11 @@ export class SseTransport implements StateTransport {
   private baseUrl = '';
   private stateCallbacks: ((sessions: SessionState[]) => void)[] = [];
   private connectionCallbacks: ((connected: boolean) => void)[] = [];
+  private log: (msg: string) => void = () => {};
+
+  setLogger(fn: (msg: string) => void): void {
+    this.log = fn;
+  }
 
   connect(url: string): void {
     this.baseUrl = url;
@@ -64,10 +69,13 @@ export class SseTransport implements StateTransport {
   private connectWs(): void {
     const wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/api/streamdeck/ws';
 
+    this.log(`[WS] Attempting connection to ${wsUrl}`);
     try {
       this.ws = new WebSocket(wsUrl);
+      this.log('[WS] WebSocket object created');
 
       this.ws.on('open', () => {
+        this.log(`[WS] Connected to ${wsUrl}`);
         this.reconnectAttempt = 0;
         this.setConnected(true);
       });
@@ -86,18 +94,21 @@ export class SseTransport implements StateTransport {
       });
 
       this.ws.on('close', () => {
+        this.log('[WS] Connection closed');
         this.ws = null;
         this.setConnected(false);
         this.scheduleReconnect();
       });
 
-      this.ws.on('error', () => {
+      this.ws.on('error', (err) => {
+        this.log(`[WS] Error: ${err}`);
         this.ws?.close();
         this.ws = null;
         this.setConnected(false);
         this.scheduleReconnect();
       });
-    } catch {
+    } catch (err) {
+      this.log(`[WS] Connection failed: ${err}`);
       this.setConnected(false);
       this.scheduleReconnect();
     }
