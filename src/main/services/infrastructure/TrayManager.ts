@@ -1,4 +1,3 @@
-import { createCanvas } from '@napi-rs/canvas';
 import { app, Menu, nativeImage, Tray } from 'electron';
 
 import { focusDevtoolsWindow, focusGhosttySession } from '../../utils/ghosttyFocuser';
@@ -61,20 +60,49 @@ export function buildSessionMenuItems(
     }));
 }
 
+function parseHexColor(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
+  if (!m) return [128, 128, 128];
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+/**
+ * Render a filled circle as raw RGBA pixels, then create a NativeImage.
+ * No external canvas library needed.
+ */
 function renderIcon(color: string): Electron.NativeImage {
-  const canvas = createCanvas(ICON_SIZE * 2, ICON_SIZE * 2);
-  const ctx = canvas.getContext('2d');
-  const center = ICON_SIZE;
-  const radius = ICON_SIZE * 0.45;
+  const size = ICON_SIZE * 2; // @2x for Retina
+  const [r, g, b] = parseHexColor(color);
+  const center = size / 2;
+  const radius = size * 0.35;
+  const radiusSq = radius * radius;
 
-  ctx.beginPath();
-  ctx.arc(center, center, radius, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
+  const buffer = Buffer.alloc(size * size * 4); // RGBA
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - center;
+      const dy = y - center;
+      const distSq = dx * dx + dy * dy;
+      const offset = (y * size + x) * 4;
 
-  const buffer = canvas.toBuffer('image/png');
-  const image = nativeImage.createFromBuffer(buffer, { scaleFactor: 2 });
-  return image;
+      if (distSq <= radiusSq) {
+        // Inside circle — anti-alias the edge
+        const edgeDist = Math.sqrt(distSq) - radius + 1;
+        const alpha = edgeDist > 0 ? Math.max(0, Math.round(255 * (1 - edgeDist))) : 255;
+        buffer[offset] = r;
+        buffer[offset + 1] = g;
+        buffer[offset + 2] = b;
+        buffer[offset + 3] = alpha;
+      }
+      // else: stays transparent (0,0,0,0)
+    }
+  }
+
+  return nativeImage.createFromBuffer(buffer, {
+    width: size,
+    height: size,
+    scaleFactor: 2,
+  });
 }
 
 export class TrayManager {

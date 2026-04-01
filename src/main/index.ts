@@ -60,7 +60,7 @@ process.on('uncaughtException', (error) => {
 
 import { configManagerPromise } from './services/infrastructure/ConfigManager';
 import { HttpServer } from './services/infrastructure/HttpServer';
-import { type TrayManager } from './services/infrastructure/TrayManager';
+import { TrayManager } from './services/infrastructure/TrayManager';
 import {
   configManager,
   LocalFileSystemProvider,
