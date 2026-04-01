@@ -24,7 +24,7 @@ import { createLogger } from '@shared/utils/logger';
 
 import { DataCache } from './DataCache';
 import { FileWatcher } from './FileWatcher';
-import { type SessionStateTracker } from './SessionStateTracker';
+import { SessionStateTracker } from './SessionStateTracker';
 
 import type { FileSystemProvider } from './FileSystemProvider';
 
