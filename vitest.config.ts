@@ -20,6 +20,9 @@ export default defineConfig({
       '@shared': resolve(__dirname, 'src/shared'),
       '@main': resolve(__dirname, 'src/main'),
       '@renderer': resolve(__dirname, 'src/renderer'),
+      // Stub native/Electron-only modules that can't run in the Vitest environment
+      electron: resolve(__dirname, 'test/mocks/electron.ts'),
+      '@napi-rs/canvas': resolve(__dirname, 'test/mocks/napiCanvas.ts'),
     },
   },
 });
