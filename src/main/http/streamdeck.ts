@@ -149,26 +149,44 @@ function handleAction(
 
       const script = escaped
         ? `
+-- Find the matching tab across all Ghostty windows
+set targetWinName to ""
+set targetTabNum to 0
+
 tell application "Ghostty"
-  activate
   set winCount to count of every window
   repeat with wi from 1 to winCount
     set w to window wi
     set tabCount to count of every tab of w
     repeat with ti from 1 to tabCount
       if name of tab ti of w contains "${escaped}" then
-        tell application "System Events"
-          tell process "ghostty"
-            perform action "AXRaise" of window wi
-          end tell
-          delay 0.15
-          keystroke (ti as string) using command down
-        end tell
-        return
+        set targetWinName to name of w
+        set targetTabNum to ti
+        exit repeat
       end if
     end repeat
+    if targetTabNum > 0 then exit repeat
   end repeat
-end tell`
+end tell
+
+if targetTabNum > 0 then
+  -- Raise the correct window by matching its name in System Events
+  tell application "System Events"
+    tell process "ghostty"
+      set frontmost to true
+      repeat with w in windows
+        if name of w contains targetWinName or name of w contains "${escaped}" then
+          perform action "AXRaise" of w
+          exit repeat
+        end if
+      end repeat
+    end tell
+    delay 0.2
+    keystroke (targetTabNum as string) using command down
+  end tell
+else
+  tell application "Ghostty" to activate
+end if`
         : 'tell application "Ghostty" to activate';
 
       exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 }, () => {});
