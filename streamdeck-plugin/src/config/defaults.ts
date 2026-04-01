@@ -37,7 +37,7 @@ export const DEFAULT_KEY_SETTINGS: KeySettings = {
     working: 'open-devtools',
     waiting: 'open-terminal',
   },
-  serverUrl: 'http://localhost:24462',
+  serverUrl: 'http://localhost:3456',
 };
 
 export type SessionActivityState = 'idle' | 'working' | 'waiting-for-input';

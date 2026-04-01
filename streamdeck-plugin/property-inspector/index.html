@@ -85,7 +85,7 @@
   <h3>Connection</h3>
   <div class="field">
     <label for="serverUrl">Server URL</label>
-    <input type="text" id="serverUrl" value="http://localhost:24462" />
+    <input type="text" id="serverUrl" value="http://localhost:3456" />
   </div>
 
   <script>
@@ -124,7 +124,7 @@
       document.getElementById('actionIdle').value = (settings.actions && settings.actions.idle) || 'open-devtools';
       document.getElementById('actionWorking').value = (settings.actions && settings.actions.working) || 'open-devtools';
       document.getElementById('actionWaiting').value = (settings.actions && settings.actions.waiting) || 'open-terminal';
-      document.getElementById('serverUrl').value = settings.serverUrl || 'http://localhost:24462';
+      document.getElementById('serverUrl').value = settings.serverUrl || 'http://localhost:3456';
     }
 
     function saveSettings() {
@@ -153,7 +153,7 @@
     }
 
     async function loadProjects() {
-      var serverUrl = document.getElementById('serverUrl').value || 'http://localhost:24462';
+      var serverUrl = document.getElementById('serverUrl').value || 'http://localhost:3456';
       try {
         var response = await fetch(serverUrl + '/api/projects');
         var projects = await response.json();
