@@ -22,6 +22,7 @@ export class SessionMonitorAction {
   private boundSession: SessionState | null = null;
   private blinkController = new BlinkController();
   private lastRenderedImage = '';
+  private lastBlinkStyle = '';
   /** Track previous updatedAt to detect activity */
   private lastSeenUpdatedAt = 0;
   /** How many consecutive polls the updatedAt has been stable */
@@ -189,7 +190,11 @@ end if`
   private updateDisplay(): void {
     if (!this.boundSession) {
       this.blinkController.stop();
-      this.renderKey('idle', this.settings.projectPath ? 'no session' : 'configure', 0);
+      if (!this.settings.projectPath) {
+        this.renderKey('disconnected', 'configure', 0);
+      } else {
+        this.renderKey('idle', this.settings.displayName || 'no session', 0);
+      }
       return;
     }
 
@@ -206,12 +211,25 @@ end if`
   }
 
   private startBlinking(projectName: string, sessionCount: number): void {
-    if (this.blinkController.isBlinking()) return;
+    // Don't restart if already blinking with same style
+    if (this.blinkController.isBlinking() && this.lastBlinkStyle === this.settings.blinkStyle)
+      return;
+    this.blinkController.stop();
+    this.lastBlinkStyle = this.settings.blinkStyle;
 
-    // Soft pulse: sine wave over ~2 seconds
-    this.blinkController.startPulse(this.settings.blinkIntervalMs * 4, (brightness: number) => {
-      this.renderKey('waiting-for-input', projectName, sessionCount, brightness);
-    });
+    if (this.settings.blinkStyle === 'pulse') {
+      this.blinkController.startPulse(this.settings.blinkIntervalMs * 4, (brightness: number) => {
+        this.renderKey('waiting-for-input', projectName, sessionCount, brightness);
+      });
+    } else {
+      this.blinkController.start(this.settings.blinkIntervalMs, (isOn: boolean) => {
+        if (isOn) {
+          this.renderKey('waiting-for-input', projectName, sessionCount);
+        } else {
+          this.renderKey('disconnected', projectName, sessionCount, undefined, 'waiting');
+        }
+      });
+    }
 
     this.renderKey('waiting-for-input', projectName, sessionCount);
   }
@@ -220,7 +238,8 @@ end if`
     state: SessionActivityState | 'disconnected',
     projectName: string,
     sessionCount: number,
-    brightness?: number
+    brightness?: number,
+    statusText?: string
   ): Promise<void> {
     try {
       const image = await this.renderer.render({
@@ -229,6 +248,7 @@ end if`
         sessionCount,
         settings: this.settings,
         brightness,
+        statusText,
       });
 
       if (image !== this.lastRenderedImage) {

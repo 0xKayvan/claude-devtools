@@ -25,14 +25,14 @@ export const DEFAULT_KEY_SETTINGS: KeySettings = {
   projectPath: '',
   displayName: '',
   isOverflowKey: false,
-  displayMode: 'name-count',
+  displayMode: 'name-status',
   colors: {
     idle: '#22c55e',
     working: '#3b82f6',
     waiting: '#f59e0b',
     disconnected: '#71717a',
   },
-  blinkStyle: 'toggle',
+  blinkStyle: 'pulse',
   blinkIntervalMs: 500,
   actions: {
     idle: 'open-devtools',

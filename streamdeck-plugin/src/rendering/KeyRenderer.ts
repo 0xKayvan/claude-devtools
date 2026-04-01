@@ -17,11 +17,13 @@ export interface RenderOptions {
   settings: KeySettings;
   /** Optional brightness multiplier for pulse effect (0-1). Default 1. */
   brightness?: number;
+  /** Override the status text (e.g. show "waiting" even when state is "disconnected" for blink off) */
+  statusText?: string;
 }
 
 export class KeyRenderer {
   async render(options: RenderOptions): Promise<string> {
-    const { projectName, state, sessionCount, settings, brightness = 1 } = options;
+    const { projectName, state, sessionCount, settings, brightness = 1, statusText } = options;
     const theme = getThemeForState(state, settings.colors);
 
     const canvas = createCanvas(KEY_SIZE, KEY_SIZE);
@@ -46,8 +48,8 @@ export class KeyRenderer {
     if (settings.displayMode === 'name-status') {
       ctx.font = `${FONT_SIZE - 4}px sans-serif`;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      const statusText = state === 'waiting-for-input' ? 'waiting' : state;
-      ctx.fillText(statusText, KEY_SIZE / 2, textY + FONT_SIZE + 4);
+      const displayStatus = statusText ?? (state === 'waiting-for-input' ? 'waiting' : state);
+      ctx.fillText(displayStatus, KEY_SIZE / 2, textY + FONT_SIZE + 4);
     }
 
     // Badge for session count
