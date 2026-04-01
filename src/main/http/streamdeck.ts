@@ -134,7 +134,15 @@ function handleAction(
 
   if (action === 'open-terminal') {
     if (process.platform === 'darwin') {
-      focusGhosttyTab(sessionId, services);
+      const { shell } = require('electron') as typeof import('electron');
+      // Use Electron's shell API to open Ghostty — bypasses sandbox restrictions
+      shell.openExternal('file:///Applications/Ghostty.app').catch(() => {
+        // Fallback: try exec
+        const { exec } = require('child_process') as typeof import('child_process');
+        exec('open -a Ghostty');
+      });
+      // Tab focusing runs separately after Ghostty activates
+      setTimeout(() => focusGhosttyTab(sessionId, services), 300);
     }
     return { success: true };
   }
