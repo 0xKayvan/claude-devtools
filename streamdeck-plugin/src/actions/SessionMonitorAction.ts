@@ -107,20 +107,12 @@ export class SessionMonitorAction {
 
   /**
    * Determine the effective display state.
-   * If the server says waiting-for-input but updatedAt is still changing,
-   * the session is actively working (tool executing, not truly waiting).
+   * Trust the server state directly — the server-side settle timer
+   * already handles the waiting-for-input debounce.
    */
   private getEffectiveState(): SessionActivityState {
     if (!this.boundSession) return 'idle';
-
-    const serverState = this.boundSession.state;
-
-    if (serverState === 'waiting-for-input' && this.stablePolls < WAITING_CONFIRM_POLLS) {
-      // updatedAt was recently changing — session is still active
-      return 'working';
-    }
-
-    return serverState;
+    return this.boundSession.state;
   }
 
   private updateDisplay(): void {
