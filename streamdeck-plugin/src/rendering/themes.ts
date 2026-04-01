@@ -1,7 +1,7 @@
 // streamdeck-plugin/src/rendering/themes.ts
 
 export const KEY_SIZE = 144;
-export const FONT_SIZE = 16;
+export const FONT_SIZE = 22;
 export const BADGE_SIZE = 28;
 export const BADGE_FONT_SIZE = 14;
 export const PADDING = 8;
