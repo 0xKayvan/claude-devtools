@@ -359,6 +359,8 @@ async function startHttpServer(
         dataCache: activeContext.dataCache,
         updaterService,
         sshConnectionManager,
+        sessionStateTracker: activeContext.sessionStateTracker,
+        mainWindow,
       },
       modeSwitchHandler,
       config.httpServer?.port ?? 3456

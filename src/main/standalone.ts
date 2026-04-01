@@ -146,6 +146,8 @@ async function start(): Promise<void> {
     dataCache: localContext.dataCache,
     updaterService: updaterServiceStub,
     sshConnectionManager: sshConnectionManagerStub,
+    sessionStateTracker: localContext.sessionStateTracker,
+    mainWindow: null,
   };
 
   // No-op mode switch handler (no SSH in standalone)
