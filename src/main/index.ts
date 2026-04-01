@@ -463,7 +463,8 @@ function createWindow(): void {
     if (mainWindow && !mainWindow.isDestroyed()) {
       syncTrafficLightPosition(mainWindow);
       // Auto-check for updates 3 seconds after window loads
-      setTimeout(() => updaterService.checkForUpdates(), 3000);
+      // Auto-update check disabled for local builds
+      // setTimeout(() => updaterService.checkForUpdates(), 3000);
     }
   });
 
