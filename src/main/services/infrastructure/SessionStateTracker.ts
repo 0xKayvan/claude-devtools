@@ -1,4 +1,6 @@
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import { checkMessagesOngoing } from '../../utils/sessionStateDetection';
 
@@ -85,8 +87,26 @@ export class SessionStateTracker extends EventEmitter {
   private async handleFileChange(event: FileChangeEvent): Promise<void> {
     if (this.disposed) return;
     if (!event.sessionId) return;
-    // Skip subagent files — only track top-level sessions
-    if (event.isSubagent) return;
+
+    // For subagent file changes, trigger a re-evaluation of the parent session
+    // so that subagent waiting-for-input propagates to the parent's state
+    if (event.isSubagent) {
+      // event.sessionId for subagents is the parent session ID
+      const parentSessionId = event.sessionId;
+      if (this.states.has(parentSessionId)) {
+        this.lastFileChange.set(parentSessionId, Date.now());
+        const existing = this.debounceTimers.get(parentSessionId);
+        if (existing) clearTimeout(existing);
+        this.debounceTimers.set(
+          parentSessionId,
+          setTimeout(() => {
+            this.debounceTimers.delete(parentSessionId);
+            this.updateSessionState(parentSessionId, event.projectId).catch(() => {});
+          }, DEBOUNCE_MS)
+        );
+      }
+      return;
+    }
 
     if (event.type === 'unlink') {
       this.removeSession(event.sessionId);
@@ -130,6 +150,15 @@ export class SessionStateTracker extends EventEmitter {
 
       const parsedSession = await this.sessionParser.parseSession(resolvedProjectId, sessionId);
       let state = this.detectActivityState(parsedSession.messages);
+
+      // If the main session is "working" (has pending internal tools like Agent/Task),
+      // check if any active subagent is waiting for user input
+      if (state === 'working') {
+        const subagentWaiting = await this.checkSubagentsWaiting(resolvedProjectId, sessionId);
+        if (subagentWaiting) {
+          state = 'waiting-for-input';
+        }
+      }
 
       // If raw state is waiting-for-input but file was recently modified,
       // the tool is still executing — report as working.
@@ -192,6 +221,45 @@ export class SessionStateTracker extends EventEmitter {
     } catch {
       // Session may have been deleted or be unparseable
     }
+  }
+
+  /**
+   * Check if any subagent of the given session is waiting for user input.
+   * Reads the most recently modified subagent JSONL files and checks their state.
+   */
+  private async checkSubagentsWaiting(projectId: string, sessionId: string): Promise<boolean> {
+    try {
+      const subagentsDir = this.projectScanner.getSubagentsPath(projectId, sessionId);
+      if (!fs.existsSync(subagentsDir)) return false;
+
+      const files = fs
+        .readdirSync(subagentsDir)
+        .filter((f) => f.endsWith('.jsonl'))
+        .map((f) => ({
+          name: f,
+          path: path.join(subagentsDir, f),
+          mtime: fs.statSync(path.join(subagentsDir, f)).mtimeMs,
+        }))
+        // Only check recently modified subagents (last 30 seconds)
+        .filter((f) => Date.now() - f.mtime < 30_000)
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, 5); // Check at most 5 most recent
+
+      for (const file of files) {
+        try {
+          const parsed = await this.sessionParser.parseSessionFile(file.path);
+          const subState = this.detectActivityState(parsed.messages);
+          if (subState === 'waiting-for-input') {
+            return true;
+          }
+        } catch {
+          // Skip unparseable subagent files
+        }
+      }
+    } catch {
+      // Subagent directory doesn't exist or can't be read
+    }
+    return false;
   }
 
   private removeSession(sessionId: string): void {
