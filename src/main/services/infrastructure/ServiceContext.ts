@@ -116,9 +116,8 @@ export class ServiceContext {
       config.todosDir,
       config.fsProvider
     );
-    this.fileWatcher.setProjectScanner(this.projectScanner);
 
-    // 7. SessionStateTracker - depends on FileWatcher, SessionParser, and ProjectScanner
+    // SessionStateTracker - depends on FileWatcher, SessionParser, and ProjectScanner
     this.sessionStateTracker = new SessionStateTracker(
       this.fileWatcher,
       this.sessionParser,
@@ -183,8 +182,6 @@ export class ServiceContext {
 
     // Stop and dispose FileWatcher
     this.fileWatcher.dispose();
-
-    // Dispose SessionStateTracker
     this.sessionStateTracker.dispose();
 
     // Dispose DataCache

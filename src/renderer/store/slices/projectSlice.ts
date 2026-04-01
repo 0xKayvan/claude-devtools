@@ -84,8 +84,6 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         sessionContextStats: null,
         sessionDetailError: null,
       });
-      // Invalidate stale cache so fetchSessionsInitial() overwrites with fresh data
-      get()._sessionCache.delete(id);
     } else {
       set({
         selectedProjectId: id,
