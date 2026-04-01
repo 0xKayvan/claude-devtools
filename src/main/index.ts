@@ -60,6 +60,7 @@ process.on('uncaughtException', (error) => {
 
 import { configManagerPromise } from './services/infrastructure/ConfigManager';
 import { HttpServer } from './services/infrastructure/HttpServer';
+import { type TrayManager } from './services/infrastructure/TrayManager';
 import {
   configManager,
   LocalFileSystemProvider,
@@ -82,6 +83,7 @@ let notificationManager: NotificationManager;
 let updaterService: UpdaterService;
 let sshConnectionManager: SshConnectionManager;
 let httpServer: HttpServer;
+let trayManager: TrayManager;
 
 // File watcher event cleanup functions
 let fileChangeCleanup: (() => void) | null = null;
@@ -341,6 +343,10 @@ function initializeServices(): void {
     if (appConfig.httpServer?.enabled) {
       void startHttpServer(handleModeSwitch);
     }
+
+    // Initialize menu bar tray
+    const activeContext = contextRegistry.getActive();
+    trayManager = new TrayManager(activeContext.sessionStateTracker);
   });
 
   logger.info('Services initialized successfully');
@@ -405,6 +411,11 @@ function shutdownServices(): void {
   // Dispose SSH connection manager
   if (sshConnectionManager) {
     sshConnectionManager.dispose();
+  }
+
+  // Dispose tray manager
+  if (trayManager) {
+    trayManager.dispose();
   }
 
   // Remove IPC handlers
