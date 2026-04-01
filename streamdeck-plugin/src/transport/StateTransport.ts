@@ -1,5 +1,5 @@
 // streamdeck-plugin/src/transport/StateTransport.ts
-import type { SessionState } from '../config/defaults';
+import type { SessionState } from '../config/defaults.js';
 
 export interface ActionResult {
   success: boolean;

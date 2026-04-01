@@ -1,4 +1,5 @@
 import streamDeck, {
+  action,
   SingletonAction,
   type WillAppearEvent,
   type WillDisappearEvent,
@@ -17,6 +18,7 @@ const renderer = new KeyRenderer();
 // Map of action context IDs to SessionMonitor instances
 const monitors = new Map<string, SessionMonitor>();
 
+@action({ UUID: 'dev.nouri.tools.claude-devtools.session-monitor' })
 class SessionMonitorAction extends SingletonAction {
   override onWillAppear(ev: WillAppearEvent<JsonObject>): void {
     const monitor = new SessionMonitor(transport, renderer);
@@ -56,7 +58,5 @@ class SessionMonitorAction extends SingletonAction {
   }
 }
 
-// Register and connect
-const sessionMonitorAction = new SessionMonitorAction();
-streamDeck.actions.registerAction(sessionMonitorAction);
+// Connect to StreamDeck
 streamDeck.connect();

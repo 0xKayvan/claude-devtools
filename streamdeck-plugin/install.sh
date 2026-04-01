@@ -18,7 +18,8 @@ fi
 # Build the plugin
 echo "[1/5] Building plugin..."
 cd "$SCRIPT_DIR"
-pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+# Use npm (not pnpm) for flat node_modules — StreamDeck needs all deps at top level
+npm install --install-strategy=hoisted 2>/dev/null || npm install
 npx tsc
 echo "      Built successfully."
 

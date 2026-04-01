@@ -1,7 +1,7 @@
 // streamdeck-plugin/src/transport/SseTransport.ts
 import { EventSource as EventSourceLib } from 'eventsource';
-import type { StateTransport, ActionResult } from './StateTransport';
-import type { SessionState } from '../config/defaults';
+import type { StateTransport, ActionResult } from './StateTransport.js';
+import type { SessionState } from '../config/defaults.js';
 
 const BASE_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30_000;

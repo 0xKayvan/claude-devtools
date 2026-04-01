@@ -1,9 +1,9 @@
 // streamdeck-plugin/src/actions/SessionMonitorAction.ts
-import type { StateTransport } from '../transport/StateTransport';
-import type { KeyRenderer, RenderOptions } from '../rendering/KeyRenderer';
-import { BlinkController } from '../rendering/BlinkController';
-import type { KeySettings, SessionState, SessionActivityState } from '../config/defaults';
-import { DEFAULT_KEY_SETTINGS } from '../config/defaults';
+import type { StateTransport } from '../transport/StateTransport.js';
+import type { KeyRenderer, RenderOptions } from '../rendering/KeyRenderer.js';
+import { BlinkController } from '../rendering/BlinkController.js';
+import type { KeySettings, SessionState, SessionActivityState } from '../config/defaults.js';
+import { DEFAULT_KEY_SETTINGS } from '../config/defaults.js';
 
 interface ActionContext {
   setImage(base64: string): void;

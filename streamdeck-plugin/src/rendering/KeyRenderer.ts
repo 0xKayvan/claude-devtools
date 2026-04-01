@@ -7,8 +7,8 @@ import {
   BADGE_FONT_SIZE,
   PADDING,
   getThemeForState,
-} from './themes';
-import type { KeySettings, SessionActivityState } from '../config/defaults';
+} from './themes.js';
+import type { KeySettings, SessionActivityState } from '../config/defaults.js';
 
 export interface RenderOptions {
   projectName: string;
