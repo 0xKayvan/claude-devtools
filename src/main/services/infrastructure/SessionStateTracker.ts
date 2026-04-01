@@ -11,7 +11,7 @@ import type { SessionActivityState, SessionState } from '@shared/types/streamdec
 
 const DEBOUNCE_MS = 100;
 /** How long a file must be quiet before we consider it "waiting for input" */
-const WAITING_SETTLE_MS = 3000;
+const WAITING_SETTLE_MS = 1000;
 
 export class SessionStateTracker extends EventEmitter {
   private states = new Map<string, SessionState>();
