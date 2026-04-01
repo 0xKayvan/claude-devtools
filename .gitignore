@@ -46,4 +46,5 @@ temp/
 
 
 eslint-fix/
-remotion/*
+.worktrees/
+.superpowers/

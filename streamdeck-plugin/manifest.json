@@ -1,0 +1,31 @@
+{
+  "Name": "Claude Devtools",
+  "Version": "0.1.0",
+  "Author": "claude-devtools",
+  "Description": "Monitor Claude Code sessions with real-time status on your StreamDeck keys",
+  "Category": "Developer Tools",
+  "Icon": "assets/icons/plugin-icon",
+  "CodePath": "dist/plugin.js",
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "10.15" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Software": {
+    "MinimumVersion": "6.0"
+  },
+  "SDKVersion": 2,
+  "Actions": [
+    {
+      "Name": "Session Monitor",
+      "UUID": "com.claude-devtools.session-monitor",
+      "Icon": "assets/icons/action-icon",
+      "Tooltip": "Monitor a Claude Code project session",
+      "PropertyInspectorPath": "property-inspector/index.html",
+      "States": [
+        {
+          "Image": "assets/icons/state-default"
+        }
+      ]
+    }
+  ]
+}

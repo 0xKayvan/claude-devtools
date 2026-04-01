@@ -14,6 +14,7 @@ import { registerProjectRoutes } from './projects';
 import { registerSearchRoutes } from './search';
 import { registerSessionRoutes } from './sessions';
 import { registerSshRoutes } from './ssh';
+import { registerStreamDeckRoutes } from './streamdeck';
 import { registerSubagentRoutes } from './subagents';
 import { registerUpdaterRoutes } from './updater';
 import { registerUtilityRoutes } from './utility';
@@ -27,7 +28,9 @@ import type {
   SubagentResolver,
   UpdaterService,
 } from '../services';
+import type { SessionStateTracker } from '../services/infrastructure/SessionStateTracker';
 import type { SshConnectionManager } from '../services/infrastructure/SshConnectionManager';
+import type { BrowserWindow } from 'electron';
 import type { FastifyInstance } from 'fastify';
 
 const logger = createLogger('HTTP:routes');
@@ -40,6 +43,8 @@ export interface HttpServices {
   dataCache: DataCache;
   updaterService: UpdaterService;
   sshConnectionManager: SshConnectionManager;
+  sessionStateTracker: SessionStateTracker;
+  mainWindow: BrowserWindow | null;
 }
 
 export function registerHttpRoutes(
@@ -58,6 +63,10 @@ export function registerHttpRoutes(
   registerSshRoutes(app, services.sshConnectionManager, sshModeSwitchCallback);
   registerUpdaterRoutes(app, services);
   registerEventRoutes(app);
+  registerStreamDeckRoutes(app, {
+    sessionStateTracker: services.sessionStateTracker,
+    mainWindow: services.mainWindow,
+  });
 
   logger.info('All HTTP routes registered');
 }
