@@ -84,6 +84,9 @@ export class SseTransport implements StateTransport {
         try {
           const msg = JSON.parse(raw.toString());
           if (msg.type === 'session-state-change' && Array.isArray(msg.sessions)) {
+            this.log(
+              `[WS] Received ${msg.sessions.length} sessions, callbacks=${this.stateCallbacks.length}`
+            );
             for (const cb of this.stateCallbacks) {
               cb(msg.sessions as SessionState[]);
             }

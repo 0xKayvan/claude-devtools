@@ -157,9 +157,8 @@ export class SessionStateTracker extends EventEmitter {
       };
 
       this.states.set(sessionId, next);
-      if (prev?.state !== next.state) {
-        this.emit('state-change', this.getStates());
-      }
+      // Always emit — plugin uses updatedAt changes to detect activity
+      this.emit('state-change', this.getStates());
     } catch {
       // Session may have been deleted or be unparseable
     }
