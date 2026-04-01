@@ -1,5 +1,5 @@
 // streamdeck-plugin/src/transport/SseTransport.ts
-import EventSourceLib from 'eventsource';
+import { EventSource as EventSourceLib } from 'eventsource';
 import type { StateTransport, ActionResult } from './StateTransport';
 import type { SessionState } from '../config/defaults';
 

@@ -2,6 +2,7 @@
   "name": "claude-devtools-streamdeck",
   "version": "0.1.0",
   "description": "StreamDeck plugin for claude-devtools session monitoring",
+  "type": "module",
   "main": "dist/plugin.js",
   "scripts": {
     "build": "tsc",
@@ -11,8 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^2.0.0",
-    "@napi-rs/canvas": "^0.1.0",
+    "@elgato/streamdeck": "^2.0.4",
+    "@elgato/utils": "^0.4.4",
+    "@napi-rs/canvas": "^0.1.97",
     "eventsource": "^3.0.7"
   },
   "devDependencies": {
