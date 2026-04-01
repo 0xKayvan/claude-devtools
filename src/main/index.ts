@@ -334,10 +334,10 @@ function initializeServices(): void {
   });
 
   // Start HTTP server if enabled in config
-  // configManager may not have loaded from disk yet (async init race),
-  // so await the init promise before reading config
-  void configManagerPromise.then(() => {
-    const appConfig = configManager.getConfig();
+  // configManager export captures a stale default instance — use the
+  // resolved promise to get the properly-loaded instance from disk
+  void configManagerPromise.then((loadedConfigManager) => {
+    const appConfig = loadedConfigManager.getConfig();
     if (appConfig.httpServer?.enabled) {
       void startHttpServer(handleModeSwitch);
     }
