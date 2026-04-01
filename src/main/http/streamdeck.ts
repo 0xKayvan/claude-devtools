@@ -137,7 +137,76 @@ function handleAction(
   if (action === 'open-terminal') {
     if (process.platform === 'darwin') {
       const { shell } = require('electron') as typeof import('electron');
+      const { execSync } = require('child_process') as typeof import('child_process');
+
+      // Activate Ghostty
       shell.openPath('/Applications/Ghostty.app');
+
+      // Find the correct tab by matching claude process CWD → TTY → tab index
+      const states = services.sessionStateTracker.getStates();
+      const session = states.find((s) => s.sessionId === sessionId);
+      const projectPath = session?.projectPath ?? '';
+
+      if (projectPath) {
+        try {
+          // Find claude process with matching CWD and get its TTY
+          const psOut = execSync('ps -eo pid,tty,command | grep -E "[c]laude$|[C]laude$"', {
+            encoding: 'utf8',
+            timeout: 2000,
+          }).trim();
+
+          let targetTty = '';
+          for (const line of psOut.split('\n')) {
+            const m = /^(\d+)\s+(ttys\d+)/.exec(line.trim());
+            if (!m) continue;
+            try {
+              const cwd = execSync(`lsof -p ${m[1]} -Fn 2>/dev/null | grep '^n/' | head -1`, {
+                encoding: 'utf8',
+                timeout: 2000,
+              })
+                .trim()
+                .replace(/^n/, '');
+              if (cwd === projectPath) {
+                targetTty = m[2];
+                break;
+              }
+            } catch {
+              continue;
+            }
+          }
+
+          if (targetTty) {
+            // Map TTYs to tab indices via login shell processes
+            const loginOut = execSync(
+              'ps -eo pid,ppid,tty,command | grep "[l]ogin.*zsh\\|[l]ogin.*bash"',
+              { encoding: 'utf8', timeout: 2000 }
+            ).trim();
+
+            const tabTtys: string[] = [];
+            for (const line of loginOut.split('\n')) {
+              const m = /^\d+\s+\d+\s+(ttys\d+)/.exec(line.trim());
+              if (m && !tabTtys.includes(m[1])) tabTtys.push(m[1]);
+            }
+
+            const tabIndex = tabTtys.indexOf(targetTty);
+            if (tabIndex >= 0) {
+              // Delay slightly to let Ghostty activate first
+              setTimeout(() => {
+                try {
+                  execSync(
+                    `osascript -e 'tell application "Ghostty" to tell first window to set selected of tab ${tabIndex + 1} to true'`,
+                    { timeout: 3000 }
+                  );
+                } catch {
+                  /* tab switch failed — Ghostty is at least in front */
+                }
+              }, 200);
+            }
+          }
+        } catch {
+          /* process lookup failed — Ghostty is at least in front */
+        }
+      }
     }
     return { success: true };
   }
