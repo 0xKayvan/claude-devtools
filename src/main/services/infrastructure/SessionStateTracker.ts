@@ -9,7 +9,7 @@ import type { SessionParser } from '../parsing/SessionParser';
 import type { FileWatcher } from './FileWatcher';
 import type { SessionActivityState, SessionState } from '@shared/types/streamdeck';
 
-const DEBOUNCE_MS = 200;
+const DEBOUNCE_MS = 300;
 /** How long a file must be quiet before we consider it "waiting for input" */
 const WAITING_SETTLE_MS = 3000;
 
@@ -17,7 +17,6 @@ export class SessionStateTracker extends EventEmitter {
   private states = new Map<string, SessionState>();
   private debounceTimers = new Map<string, NodeJS.Timeout>();
   private waitingTimers = new Map<string, NodeJS.Timeout>();
-  /** Tracks the last time each session's file was modified */
   private lastFileChange = new Map<string, number>();
   private disposed = false;
 
@@ -28,27 +27,8 @@ export class SessionStateTracker extends EventEmitter {
   ) {
     super();
     this.fileWatcher.on('file-change', this.handleFileChange.bind(this));
-
-    // Initial scan — populate state for all existing sessions
-    this.performInitialScan().catch((err) => {
-      console.error('SessionStateTracker: initial scan failed:', err);
-    });
-  }
-
-  private async performInitialScan(): Promise<void> {
-    try {
-      const projects = await this.projectScanner.scan();
-      for (const project of projects) {
-        for (const sessionId of project.sessions) {
-          await this.updateSessionState(sessionId, project.id);
-        }
-      }
-      if (this.states.size > 0) {
-        this.emit('state-change', this.getStates());
-      }
-    } catch (err) {
-      console.error('SessionStateTracker: initial scan error:', err);
-    }
+    // No initial scan — states are populated lazily as file-change events arrive.
+    // This avoids parsing all session files on startup which blocks the event loop.
   }
 
   /**
@@ -61,7 +41,6 @@ export class SessionStateTracker extends EventEmitter {
     const isOngoing = checkMessagesOngoing(messages);
     if (!isOngoing) return 'idle';
 
-    // Session is ongoing — determine if working or waiting for input
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.type !== 'assistant') continue;
@@ -88,16 +67,17 @@ export class SessionStateTracker extends EventEmitter {
   private async handleFileChange(event: FileChangeEvent): Promise<void> {
     if (this.disposed) return;
     if (!event.sessionId) return;
+    // Skip subagent files — only track top-level sessions
+    if (event.isSubagent) return;
 
     if (event.type === 'unlink') {
       this.removeSession(event.sessionId);
       return;
     }
 
-    // Record file modification time
     this.lastFileChange.set(event.sessionId, Date.now());
 
-    // Cancel any pending waiting-for-input timer (file just changed = still active)
+    // Cancel any pending waiting-for-input timer
     const waitingTimer = this.waitingTimers.get(event.sessionId);
     if (waitingTimer) {
       clearTimeout(waitingTimer);
@@ -112,9 +92,7 @@ export class SessionStateTracker extends EventEmitter {
       event.sessionId,
       setTimeout(() => {
         this.debounceTimers.delete(event.sessionId!);
-        this.updateSessionState(event.sessionId!, event.projectId).catch((err) => {
-          console.error(`Error updating state for session ${event.sessionId}:`, err);
-        });
+        this.updateSessionState(event.sessionId!, event.projectId).catch(() => {});
       }, DEBOUNCE_MS)
     );
   }
@@ -135,18 +113,15 @@ export class SessionStateTracker extends EventEmitter {
       const parsedSession = await this.sessionParser.parseSession(resolvedProjectId, sessionId);
       let state = this.detectActivityState(parsedSession.messages);
 
-      // If the raw state is waiting-for-input but the file was just modified,
-      // the tool is still executing — report as "working" and schedule a
-      // delayed re-check to see if it settles into waiting-for-input.
+      // If raw state is waiting-for-input but file was recently modified,
+      // the tool is still executing — report as working.
       if (state === 'waiting-for-input') {
         const lastChange = this.lastFileChange.get(sessionId) ?? 0;
         const timeSinceChange = Date.now() - lastChange;
 
         if (timeSinceChange < WAITING_SETTLE_MS) {
-          // File was recently modified — tool is still executing
           state = 'working';
 
-          // Schedule a re-check after the settle period
           if (!this.waitingTimers.has(sessionId)) {
             this.waitingTimers.set(
               sessionId,
@@ -181,13 +156,12 @@ export class SessionStateTracker extends EventEmitter {
         updatedAt: Date.now(),
       };
 
-      // Always update the state map; only emit when state changes
       this.states.set(sessionId, next);
       if (prev?.state !== next.state) {
         this.emit('state-change', this.getStates());
       }
     } catch {
-      // Session may have been deleted or be unparseable — skip silently
+      // Session may have been deleted or be unparseable
     }
   }
 
