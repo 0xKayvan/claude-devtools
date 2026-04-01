@@ -133,8 +133,50 @@ function handleAction(
   }
 
   if (action === 'open-terminal') {
+    if (process.platform === 'darwin') {
+      focusGhosttyTab(sessionId, services);
+    }
     return { success: true };
   }
 
   return { success: false, error: 'Unknown action' };
+}
+
+/**
+ * Focus the Ghostty tab running the Claude Code session for a given project.
+ * Matches by finding the claude process CWD, then using AppleScript to
+ * focus the Ghostty tab whose name contains the project folder name.
+ */
+function focusGhosttyTab(sessionId: string, services: StreamDeckRouteServices): void {
+  const { exec } = require('child_process') as typeof import('child_process');
+
+  const states = services.sessionStateTracker.getStates();
+  const session = states.find((s) => s.sessionId === sessionId);
+  const projectPath = session?.projectPath ?? '';
+  const projectName = projectPath.split('/').pop() ?? '';
+
+  if (!projectName) {
+    exec('open -a Ghostty');
+    return;
+  }
+
+  // Use AppleScript to find the Ghostty tab matching this project name and focus it
+  const escapedName = projectName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const script = [
+    'tell application "Ghostty"',
+    '  activate',
+    '  tell first window',
+    '    set tabList to every tab',
+    '    repeat with i from 1 to count of tabList',
+    '      set t to item i of tabList',
+    `      if name of t contains "${escapedName}" then`,
+    '        set selected of t to true',
+    '        return',
+    '      end if',
+    '    end repeat',
+    '  end tell',
+    'end tell',
+  ].join('\n');
+
+  exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 3000 }, () => {});
 }
