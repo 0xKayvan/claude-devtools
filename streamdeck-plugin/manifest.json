@@ -17,7 +17,7 @@
   "Actions": [
     {
       "Name": "Session Monitor",
-      "UUID": "com.claude-devtools.session-monitor",
+      "UUID": "dev.nouri.tools.claude-devtools.session-monitor",
       "Icon": "assets/icons/action-icon",
       "Tooltip": "Monitor a Claude Code project session",
       "PropertyInspectorPath": "property-inspector/index.html",
