@@ -144,39 +144,95 @@ function handleAction(
 
 /**
  * Focus the Ghostty tab running the Claude Code session for a given project.
- * Matches by finding the claude process CWD, then using AppleScript to
- * focus the Ghostty tab whose name contains the project folder name.
+ *
+ * 1. Find the `claude` process whose CWD matches the project path
+ * 2. Get its TTY (e.g. ttys004)
+ * 3. Find the tab index by matching TTYs to Ghostty tabs in order
+ * 4. Focus that tab via AppleScript
  */
 function focusGhosttyTab(sessionId: string, services: StreamDeckRouteServices): void {
-  const { exec } = require('child_process') as typeof import('child_process');
+  const { execSync, exec } = require('child_process') as typeof import('child_process');
 
   const states = services.sessionStateTracker.getStates();
   const session = states.find((s) => s.sessionId === sessionId);
   const projectPath = session?.projectPath ?? '';
-  const projectName = projectPath.split('/').pop() ?? '';
 
-  if (!projectName) {
+  if (!projectPath) {
     exec('open -a Ghostty');
     return;
   }
 
-  // Use AppleScript to find the Ghostty tab matching this project name and focus it
-  const escapedName = projectName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const script = [
-    'tell application "Ghostty"',
-    '  activate',
-    '  tell first window',
-    '    set tabList to every tab',
-    '    repeat with i from 1 to count of tabList',
-    '      set t to item i of tabList',
-    `      if name of t contains "${escapedName}" then`,
-    '        set selected of t to true',
-    '        return',
-    '      end if',
-    '    end repeat',
-    '  end tell',
-    'end tell',
-  ].join('\n');
+  try {
+    // Step 1: Find claude processes with TTYs and match by CWD
+    const psOut = execSync('ps -eo pid,tty,command | grep -E "[c]laude$|[C]laude$"', {
+      encoding: 'utf8',
+      timeout: 2000,
+    }).trim();
 
-  exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 3000 }, () => {});
+    let targetTty = '';
+    for (const line of psOut.split('\n')) {
+      const m = /^(\d+)\s+(ttys\d+)/.exec(line.trim());
+      if (!m) continue;
+      const pid = m[1];
+      try {
+        const cwd = execSync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | head -1`, {
+          encoding: 'utf8',
+          timeout: 2000,
+        })
+          .trim()
+          .replace(/^n/, '');
+        if (cwd === projectPath) {
+          targetTty = m[2];
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    if (!targetTty) {
+      exec('open -a Ghostty');
+      return;
+    }
+
+    // Step 2: Find which Ghostty tab index owns this TTY
+    // Get all Ghostty tab TTYs by finding login processes spawned by Ghostty
+    const ghosttyPid = execSync('pgrep -x ghostty', { encoding: 'utf8', timeout: 2000 })
+      .trim()
+      .split('\n')[0];
+
+    // Find the login shells (direct children of Ghostty) and their TTYs — these map 1:1 to tabs
+    const loginOut = execSync(
+      `ps -eo pid,ppid,tty,command | grep "login.*zsh\\|login.*bash" | grep -v grep`,
+      { encoding: 'utf8', timeout: 2000 }
+    ).trim();
+
+    // Collect unique TTYs in order — each corresponds to a tab
+    const tabTtys: string[] = [];
+    for (const line of loginOut.split('\n')) {
+      const m = /^\d+\s+\d+\s+(ttys\d+)/.exec(line.trim());
+      if (m && !tabTtys.includes(m[1])) {
+        tabTtys.push(m[1]);
+      }
+    }
+
+    const tabIndex = tabTtys.indexOf(targetTty);
+    if (tabIndex === -1) {
+      exec('open -a Ghostty');
+      return;
+    }
+
+    // Step 3: Focus the tab via AppleScript (1-indexed)
+    const script = `
+tell application "Ghostty"
+  activate
+  tell first window
+    set selected of tab ${tabIndex + 1} to true
+  end tell
+end tell`;
+
+    exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 3000 }, () => {});
+  } catch {
+    exec('open -a Ghostty', () => {});
+  }
 }
