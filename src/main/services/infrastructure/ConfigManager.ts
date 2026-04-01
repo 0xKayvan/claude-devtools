@@ -214,6 +214,12 @@ export interface HttpServerConfig {
   port: number;
 }
 
+export interface MenuBarConfig {
+  enabled: boolean;
+  autoHide: boolean;
+  clickAction: 'open-terminal' | 'open-devtools';
+}
+
 export interface AppConfig {
   notifications: NotificationConfig;
   general: GeneralConfig;
@@ -221,6 +227,7 @@ export interface AppConfig {
   sessions: SessionsConfig;
   ssh: SshPersistConfig;
   httpServer: HttpServerConfig;
+  menuBar: MenuBarConfig;
 }
 
 // Config section keys for type-safe updates
@@ -271,6 +278,11 @@ const DEFAULT_CONFIG: AppConfig = {
   httpServer: {
     enabled: false,
     port: 3456,
+  },
+  menuBar: {
+    enabled: true,
+    autoHide: false,
+    clickAction: 'open-terminal',
   },
 };
 
@@ -460,6 +472,10 @@ export class ConfigManager {
       httpServer: {
         ...DEFAULT_CONFIG.httpServer,
         ...(loaded.httpServer ?? {}),
+      },
+      menuBar: {
+        ...DEFAULT_CONFIG.menuBar,
+        ...(loaded.menuBar ?? {}),
       },
     };
   }
