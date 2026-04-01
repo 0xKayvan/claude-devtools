@@ -194,13 +194,14 @@ end if`
     }
 
     const effectiveState = this.getEffectiveState();
-    const { projectName, sessionCount } = this.boundSession;
+    const name = this.settings.displayName || this.boundSession.projectName;
+    const { sessionCount } = this.boundSession;
 
     if (effectiveState === 'waiting-for-input') {
-      this.startBlinking(projectName, sessionCount);
+      this.startBlinking(name, sessionCount);
     } else {
       this.blinkController.stop();
-      this.renderKey(effectiveState, projectName, sessionCount);
+      this.renderKey(effectiveState, name, sessionCount);
     }
   }
 

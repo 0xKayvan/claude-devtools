@@ -22,6 +22,10 @@
     <label for="projectPath">Project</label>
     <select id="projectPath"><option value="">— None —</option></select>
   </div>
+  <div class="field">
+    <label for="displayName">Display Name</label>
+    <input type="text" id="displayName" placeholder="Auto (from project name)" />
+  </div>
   <div class="field checkbox-row">
     <input type="checkbox" id="isOverflowKey" />
     <label for="isOverflowKey">Available as overflow key</label>
@@ -114,6 +118,7 @@
 
     function loadSettings() {
       document.getElementById('projectPath').value = settings.projectPath || '';
+      document.getElementById('displayName').value = settings.displayName || '';
       document.getElementById('isOverflowKey').checked = settings.isOverflowKey || false;
       document.getElementById('displayMode').value = settings.displayMode || 'name-count';
       document.getElementById('colorIdle').value = (settings.colors && settings.colors.idle) || '#22c55e';
@@ -130,6 +135,7 @@
     function saveSettings() {
       settings = {
         projectPath: document.getElementById('projectPath').value,
+        displayName: document.getElementById('displayName').value,
         isOverflowKey: document.getElementById('isOverflowKey').checked,
         displayMode: document.getElementById('displayMode').value,
         colors: {

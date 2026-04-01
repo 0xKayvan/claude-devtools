@@ -2,6 +2,7 @@
 
 export interface KeySettings {
   projectPath: string;
+  displayName: string;
   isOverflowKey: boolean;
   displayMode: 'name' | 'name-count' | 'name-status';
   colors: {
@@ -22,6 +23,7 @@ export interface KeySettings {
 
 export const DEFAULT_KEY_SETTINGS: KeySettings = {
   projectPath: '',
+  displayName: '',
   isOverflowKey: false,
   displayMode: 'name-count',
   colors: {
