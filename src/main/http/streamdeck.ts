@@ -7,10 +7,9 @@
  * - POST /api/streamdeck/action: Handle StreamDeck key-press actions
  */
 
-import { app, type BrowserWindow } from 'electron';
-
 import type { SessionStateTracker } from '../services/infrastructure/SessionStateTracker';
 import type { StreamDeckActionRequest } from '@shared/types/streamdeck';
+import type { BrowserWindow } from 'electron';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 
@@ -122,172 +121,20 @@ function handleAction(
   }
 
   if (action === 'open-devtools') {
-    const mainWindow = services.getMainWindow();
-    if (mainWindow) {
-      // On macOS, app.show() activates the app (brings to front) even from background
-      if (process.platform === 'darwin') {
-        app.show();
-      }
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    const { focusDevtoolsWindow } = require('../utils/ghosttyFocuser');
+    focusDevtoolsWindow();
     return { success: true };
   }
 
   if (action === 'open-terminal') {
     if (process.platform === 'darwin') {
-      const { exec } = require('child_process') as typeof import('child_process');
-
-      // Match Ghostty tab by session title across ALL windows
+      const { focusGhosttySession } = require('../utils/ghosttyFocuser');
       const states = services.sessionStateTracker.getStates();
-      const session = states.find((s) => s.sessionId === sessionId);
-      const title = session?.sessionTitle ?? '';
-
-      // Extract first few words as search term (tab names are truncated)
-      const searchWords = title ? title.split(/\s+/).slice(0, 4).join(' ') : '';
-      const escaped = searchWords.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-      const script = escaped
-        ? `
--- Find the matching tab across all Ghostty windows
-set targetWinName to ""
-set targetTabNum to 0
-
-tell application "Ghostty"
-  set winCount to count of every window
-  repeat with wi from 1 to winCount
-    set w to window wi
-    set tabCount to count of every tab of w
-    repeat with ti from 1 to tabCount
-      if name of tab ti of w contains "${escaped}" then
-        set targetWinName to name of w
-        set targetTabNum to ti
-        exit repeat
-      end if
-    end repeat
-    if targetTabNum > 0 then exit repeat
-  end repeat
-end tell
-
-if targetTabNum > 0 then
-  -- Raise the correct window by matching its name in System Events
-  tell application "System Events"
-    tell process "ghostty"
-      set frontmost to true
-      repeat with w in windows
-        if name of w contains targetWinName or name of w contains "${escaped}" then
-          perform action "AXRaise" of w
-          exit repeat
-        end if
-      end repeat
-    end tell
-    delay 0.2
-    keystroke (targetTabNum as string) using command down
-  end tell
-else
-  tell application "Ghostty" to activate
-end if`
-        : 'tell application "Ghostty" to activate';
-
-      exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 }, () => {});
+      const session = states.find((s: any) => s.sessionId === sessionId);
+      focusGhosttySession(session?.sessionTitle ?? '');
     }
     return { success: true };
   }
 
   return { success: false, error: 'Unknown action' };
-}
-
-/**
- * Focus the Ghostty tab running the Claude Code session for a given project.
- *
- * 1. Find the `claude` process whose CWD matches the project path
- * 2. Get its TTY (e.g. ttys004)
- * 3. Find the tab index by matching TTYs to Ghostty tabs in order
- * 4. Focus that tab via AppleScript
- */
-function focusGhosttyTab(sessionId: string, services: StreamDeckRouteServices): void {
-  const { execSync, exec } = require('child_process') as typeof import('child_process');
-
-  const states = services.sessionStateTracker.getStates();
-  const session = states.find((s) => s.sessionId === sessionId);
-  const projectPath = session?.projectPath ?? '';
-
-  if (!projectPath) {
-    exec('open -a Ghostty');
-    return;
-  }
-
-  try {
-    // Step 1: Find claude processes with TTYs and match by CWD
-    const psOut = execSync('ps -eo pid,tty,command | grep -E "[c]laude$|[C]laude$"', {
-      encoding: 'utf8',
-      timeout: 2000,
-    }).trim();
-
-    let targetTty = '';
-    for (const line of psOut.split('\n')) {
-      const m = /^(\d+)\s+(ttys\d+)/.exec(line.trim());
-      if (!m) continue;
-      const pid = m[1];
-      try {
-        const cwd = execSync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | head -1`, {
-          encoding: 'utf8',
-          timeout: 2000,
-        })
-          .trim()
-          .replace(/^n/, '');
-        if (cwd === projectPath) {
-          targetTty = m[2];
-          break;
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    if (!targetTty) {
-      exec('open -a Ghostty');
-      return;
-    }
-
-    // Step 2: Find which Ghostty tab index owns this TTY
-    // Get all Ghostty tab TTYs by finding login processes spawned by Ghostty
-    const ghosttyPid = execSync('pgrep -x ghostty', { encoding: 'utf8', timeout: 2000 })
-      .trim()
-      .split('\n')[0];
-
-    // Find the login shells (direct children of Ghostty) and their TTYs — these map 1:1 to tabs
-    const loginOut = execSync(
-      `ps -eo pid,ppid,tty,command | grep "login.*zsh\\|login.*bash" | grep -v grep`,
-      { encoding: 'utf8', timeout: 2000 }
-    ).trim();
-
-    // Collect unique TTYs in order — each corresponds to a tab
-    const tabTtys: string[] = [];
-    for (const line of loginOut.split('\n')) {
-      const m = /^\d+\s+\d+\s+(ttys\d+)/.exec(line.trim());
-      if (m && !tabTtys.includes(m[1])) {
-        tabTtys.push(m[1]);
-      }
-    }
-
-    const tabIndex = tabTtys.indexOf(targetTty);
-    if (tabIndex === -1) {
-      exec('open -a Ghostty');
-      return;
-    }
-
-    // Step 3: Focus the tab via AppleScript (1-indexed)
-    const script = `
-tell application "Ghostty"
-  activate
-  tell first window
-    set selected of tab ${tabIndex + 1} to true
-  end tell
-end tell`;
-
-    exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 3000 }, () => {});
-  } catch {
-    exec('open -a Ghostty', () => {});
-  }
 }
