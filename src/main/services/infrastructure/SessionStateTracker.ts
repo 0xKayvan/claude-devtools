@@ -9,7 +9,7 @@ import type { SessionParser } from '../parsing/SessionParser';
 import type { FileWatcher } from './FileWatcher';
 import type { SessionActivityState, SessionState } from '@shared/types/streamdeck';
 
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 100;
 /** How long a file must be quiet before we consider it "waiting for input" */
 const WAITING_SETTLE_MS = 3000;
 

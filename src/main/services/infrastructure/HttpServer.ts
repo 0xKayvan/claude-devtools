@@ -9,6 +9,7 @@
 
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
+import websocket from '@fastify/websocket';
 import { type HttpServices, registerHttpRoutes } from '@main/http';
 import { broadcastEvent } from '@main/http/events';
 import { createLogger } from '@shared/utils/logger';
@@ -90,6 +91,9 @@ export class HttpServer {
         credentials: true,
       });
     }
+
+    // Register WebSocket support (used by StreamDeck plugin)
+    await this.app.register(websocket);
 
     // Register static file serving and SPA fallback when renderer output exists.
     // In dev mode this requires a prior `pnpm build`; in production/standalone it's always present.
