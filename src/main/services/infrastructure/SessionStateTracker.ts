@@ -141,9 +141,13 @@ export class SessionStateTracker extends EventEmitter {
       const projectPath = project?.path ?? '';
       const projectName = project?.name ?? 'Unknown';
 
-      // Extract session title from first real user message
+      // Extract session title from first real user message (skip XML/command messages)
       const firstUserMsg = parsedSession.messages.find(
-        (m) => m.type === 'user' && !m.isMeta && typeof m.content === 'string'
+        (m) =>
+          m.type === 'user' &&
+          !m.isMeta &&
+          typeof m.content === 'string' &&
+          !m.content.startsWith('<')
       );
       const sessionTitle =
         typeof firstUserMsg?.content === 'string' ? firstUserMsg.content.slice(0, 120) : '';
