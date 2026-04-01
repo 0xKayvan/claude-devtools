@@ -136,41 +136,42 @@ function handleAction(
 
   if (action === 'open-terminal') {
     if (process.platform === 'darwin') {
-      const { shell } = require('electron') as typeof import('electron');
       const { exec } = require('child_process') as typeof import('child_process');
 
-      // Activate Ghostty
-      shell.openPath('/Applications/Ghostty.app');
-
-      // Match Ghostty tab by session title (from first user message)
+      // Match Ghostty tab by session title across ALL windows
       const states = services.sessionStateTracker.getStates();
       const session = states.find((s) => s.sessionId === sessionId);
       const title = session?.sessionTitle ?? '';
 
-      if (title) {
-        // Extract first few words as search term (tab names are truncated)
-        const searchWords = title.split(/\s+/).slice(0, 4).join(' ');
-        const escaped = searchWords.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      // Extract first few words as search term (tab names are truncated)
+      const searchWords = title ? title.split(/\s+/).slice(0, 4).join(' ') : '';
+      const escaped = searchWords.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-        setTimeout(() => {
-          const script = `
+      const script = escaped
+        ? `
 tell application "Ghostty"
   activate
-  tell first window
-    repeat with i from 1 to count of every tab
-      if name of tab i contains "${escaped}" then
-        -- Use System Events keystroke to switch tab
+  set winCount to count of every window
+  repeat with wi from 1 to winCount
+    set w to window wi
+    set tabCount to count of every tab of w
+    repeat with ti from 1 to tabCount
+      if name of tab ti of w contains "${escaped}" then
         tell application "System Events"
-          keystroke (i as string) using command down
+          tell process "ghostty"
+            perform action "AXRaise" of window wi
+          end tell
+          delay 0.15
+          keystroke (ti as string) using command down
         end tell
         return
       end if
     end repeat
-  end tell
-end tell`;
-          exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 3000 }, () => {});
-        }, 300);
-      }
+  end repeat
+end tell`
+        : 'tell application "Ghostty" to activate';
+
+      exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 }, () => {});
     }
     return { success: true };
   }
