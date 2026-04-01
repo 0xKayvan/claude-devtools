@@ -7,9 +7,10 @@
  * - POST /api/streamdeck/action: Handle StreamDeck key-press actions
  */
 
+import { app, type BrowserWindow } from 'electron';
+
 import type { SessionStateTracker } from '../services/infrastructure/SessionStateTracker';
 import type { StreamDeckActionRequest } from '@shared/types/streamdeck';
-import type { BrowserWindow } from 'electron';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 
@@ -121,6 +122,10 @@ function handleAction(
   if (action === 'open-devtools') {
     const mainWindow = services.getMainWindow();
     if (mainWindow) {
+      // On macOS, app.show() activates the app (brings to front) even from background
+      if (process.platform === 'darwin') {
+        app.show();
+      }
       mainWindow.show();
       mainWindow.focus();
     }

@@ -30,6 +30,7 @@ function bootstrapAction(act: {
     .then((settings: JsonObject) => {
       const merged = { ...DEFAULT_KEY_SETTINGS, ...settings };
       const monitor = new SessionMonitor(transport, renderer);
+      monitor.setLogger((msg) => streamDeck.logger.info(msg));
       monitor.setContext({
         setImage: (base64: string) => act.setImage(`data:image/png;base64,${base64}`),
         setTitle: (title: string) => act.setTitle(title),
@@ -65,9 +66,13 @@ class SessionMonitorActionSD extends SingletonAction {
   }
 
   override async onKeyDown(ev: KeyDownEvent<JsonObject>): Promise<void> {
-    streamDeck.logger.info(`[Plugin] onKeyDown id=${ev.action.id}`);
+    streamDeck.logger.info(
+      `[Plugin] onKeyDown id=${ev.action.id}, hasMonitor=${monitors.has(ev.action.id)}`
+    );
     const monitor = monitors.get(ev.action.id);
-    await monitor?.onKeyDown();
+    if (monitor) {
+      await monitor.onKeyDown();
+    }
   }
 
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<JsonObject>): void {

@@ -43,15 +43,26 @@ export class SessionMonitorAction {
     this.updateDisplay();
   }
 
+  setLogger(fn: (msg: string) => void): void {
+    this.log = fn;
+  }
+
+  private log: (msg: string) => void = () => {};
+
   async onKeyDown(): Promise<void> {
+    this.log(
+      `[Action] onKeyDown bound=${!!this.boundSession} state=${this.boundSession?.state} project=${this.settings.projectPath}`
+    );
     if (!this.boundSession) return;
 
     const state = this.getEffectiveState();
     const actionMap = this.settings.actions;
     const action = actionMap[state === 'waiting-for-input' ? 'waiting' : state];
 
+    this.log(`[Action] sending action=${action} session=${this.boundSession.sessionId}`);
     if (action && action !== 'none') {
       const result = await this.transport.sendAction(this.boundSession.sessionId, action);
+      this.log(`[Action] result=${JSON.stringify(result)}`);
       if (!result.success) {
         this.context?.showAlert();
       }
