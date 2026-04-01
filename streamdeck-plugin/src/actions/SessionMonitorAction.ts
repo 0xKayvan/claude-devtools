@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import type { StateTransport } from '../transport/StateTransport.js';
 import type { KeyRenderer } from '../rendering/KeyRenderer.js';
 import { BlinkController } from '../rendering/BlinkController.js';
@@ -59,13 +60,71 @@ export class SessionMonitorAction {
     const actionMap = this.settings.actions;
     const action = actionMap[state === 'waiting-for-input' ? 'waiting' : state];
 
-    this.log(`[Action] sending action=${action} session=${this.boundSession.sessionId}`);
-    if (action && action !== 'none') {
+    this.log(`[Action] action=${action} session=${this.boundSession.sessionId}`);
+    if (!action || action === 'none') return;
+
+    if (action === 'open-terminal') {
+      // Run AppleScript directly from the plugin process (has macOS permissions)
+      this.focusGhosttyTab();
+    } else {
+      // Other actions go through the server
       const result = await this.transport.sendAction(this.boundSession.sessionId, action);
       this.log(`[Action] result=${JSON.stringify(result)}`);
       if (!result.success) {
         this.context?.showAlert();
       }
+    }
+  }
+
+  private focusGhosttyTab(): void {
+    const title = this.boundSession?.sessionTitle ?? '';
+    const searchWords = title ? title.split(/\s+/).slice(0, 4).join(' ') : '';
+    const escaped = searchWords.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    this.log(`[Action] focusGhosttyTab search="${escaped}"`);
+
+    const script = escaped
+      ? `
+set targetWinName to ""
+set targetTabNum to 0
+tell application "Ghostty"
+  set winCount to count of every window
+  repeat with wi from 1 to winCount
+    set w to window wi
+    set tabCount to count of every tab of w
+    repeat with ti from 1 to tabCount
+      if name of tab ti of w contains "${escaped}" then
+        set targetWinName to name of w
+        set targetTabNum to ti
+        exit repeat
+      end if
+    end repeat
+    if targetTabNum > 0 then exit repeat
+  end repeat
+end tell
+if targetTabNum > 0 then
+  tell application "System Events"
+    tell process "ghostty"
+      set frontmost to true
+      repeat with w in windows
+        if name of w contains "${escaped}" then
+          perform action "AXRaise" of w
+          exit repeat
+        end if
+      end repeat
+    end tell
+    delay 0.2
+    keystroke (targetTabNum as string) using command down
+  end tell
+else
+  tell application "Ghostty" to activate
+end if`
+      : 'tell application "Ghostty" to activate';
+
+    try {
+      execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 });
+    } catch (err) {
+      this.log(`[Action] focusGhosttyTab error: ${err}`);
     }
   }
 
