@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Session Monitor Settings</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 8px; background: #2d2d2d; color: #ccc; font-size: 12px; }
+    h3 { font-size: 13px; margin: 16px 0 8px; color: #ccc; border-bottom: 1px solid #444; padding-bottom: 4px; }
+    .field { margin-bottom: 8px; }
+    label { display: block; margin-bottom: 2px; color: #999; }
+    select, input[type="text"], input[type="number"] { width: 100%; padding: 4px 8px; background: #1a1a1a; border: 1px solid #444; border-radius: 4px; color: #ccc; box-sizing: border-box; }
+    input[type="color"] { width: 40px; height: 28px; border: 1px solid #444; border-radius: 4px; background: none; cursor: pointer; }
+    .color-row { display: flex; align-items: center; gap: 8px; }
+    .color-label { flex: 1; }
+    .checkbox-row { display: flex; align-items: center; gap: 6px; }
+    .checkbox-row label { display: inline; margin: 0; }
+  </style>
+</head>
+<body>
+  <h3>Project Binding</h3>
+  <div class="field">
+    <label for="projectPath">Project</label>
+    <select id="projectPath"><option value="">Select a project...</option></select>
+  </div>
+  <div class="field checkbox-row">
+    <input type="checkbox" id="isOverflowKey" />
+    <label for="isOverflowKey">Available as overflow key</label>
+  </div>
+
+  <h3>Display</h3>
+  <div class="field">
+    <label for="displayMode">Display Mode</label>
+    <select id="displayMode">
+      <option value="name">Project Name Only</option>
+      <option value="name-count" selected>Name + Session Count</option>
+      <option value="name-status">Name + Status</option>
+    </select>
+  </div>
+
+  <h3>Colors</h3>
+  <div class="field color-row"><span class="color-label">Idle</span><input type="color" id="colorIdle" value="#22c55e" /></div>
+  <div class="field color-row"><span class="color-label">Working</span><input type="color" id="colorWorking" value="#3b82f6" /></div>
+  <div class="field color-row"><span class="color-label">Waiting</span><input type="color" id="colorWaiting" value="#f59e0b" /></div>
+
+  <h3>Blink Animation</h3>
+  <div class="field">
+    <label for="blinkStyle">Blink Style</label>
+    <select id="blinkStyle">
+      <option value="pulse">Color Pulse</option>
+      <option value="toggle" selected>Two-State Blink</option>
+      <option value="icon-overlay">Icon Overlay</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="blinkIntervalMs">Blink Speed (ms)</label>
+    <input type="number" id="blinkIntervalMs" value="500" min="100" max="2000" step="50" />
+  </div>
+
+  <h3>Key Press Actions</h3>
+  <div class="field">
+    <label for="actionIdle">When Idle</label>
+    <select id="actionIdle">
+      <option value="open-devtools" selected>Open Devtools</option>
+      <option value="open-terminal">Open Terminal</option>
+      <option value="none">No Action</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="actionWorking">When Working</label>
+    <select id="actionWorking">
+      <option value="open-devtools" selected>Open Devtools</option>
+      <option value="open-terminal">Open Terminal</option>
+      <option value="none">No Action</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="actionWaiting">When Waiting for Input</label>
+    <select id="actionWaiting">
+      <option value="open-devtools">Open Devtools</option>
+      <option value="open-terminal" selected>Open Terminal</option>
+      <option value="none">No Action</option>
+    </select>
+  </div>
+
+  <h3>Connection</h3>
+  <div class="field">
+    <label for="serverUrl">Server URL</label>
+    <input type="text" id="serverUrl" value="http://localhost:24462" />
+  </div>
+
+  <script>
+    let websocket = null;
+    let pluginUUID = null;
+    let settings = {};
+
+    function connectElgatoStreamDeckSocket(inPort, inPluginUUID, inRegisterEvent, inInfo, inActionInfo) {
+      pluginUUID = inPluginUUID;
+      const actionInfo = JSON.parse(inActionInfo);
+      settings = actionInfo.payload.settings || {};
+      websocket = new WebSocket('ws://127.0.0.1:' + inPort);
+      websocket.onopen = function() {
+        websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPluginUUID }));
+        loadSettings();
+        loadProjects();
+      };
+      websocket.onmessage = function(evt) {
+        const data = JSON.parse(evt.data);
+        if (data.event === 'didReceiveSettings') {
+          settings = data.payload.settings || {};
+          loadSettings();
+        }
+      };
+    }
+
+    function loadSettings() {
+      document.getElementById('projectPath').value = settings.projectPath || '';
+      document.getElementById('isOverflowKey').checked = settings.isOverflowKey || false;
+      document.getElementById('displayMode').value = settings.displayMode || 'name-count';
+      document.getElementById('colorIdle').value = (settings.colors && settings.colors.idle) || '#22c55e';
+      document.getElementById('colorWorking').value = (settings.colors && settings.colors.working) || '#3b82f6';
+      document.getElementById('colorWaiting').value = (settings.colors && settings.colors.waiting) || '#f59e0b';
+      document.getElementById('blinkStyle').value = settings.blinkStyle || 'toggle';
+      document.getElementById('blinkIntervalMs').value = settings.blinkIntervalMs || 500;
+      document.getElementById('actionIdle').value = (settings.actions && settings.actions.idle) || 'open-devtools';
+      document.getElementById('actionWorking').value = (settings.actions && settings.actions.working) || 'open-devtools';
+      document.getElementById('actionWaiting').value = (settings.actions && settings.actions.waiting) || 'open-terminal';
+      document.getElementById('serverUrl').value = settings.serverUrl || 'http://localhost:24462';
+    }
+
+    function saveSettings() {
+      settings = {
+        projectPath: document.getElementById('projectPath').value,
+        isOverflowKey: document.getElementById('isOverflowKey').checked,
+        displayMode: document.getElementById('displayMode').value,
+        colors: {
+          idle: document.getElementById('colorIdle').value,
+          working: document.getElementById('colorWorking').value,
+          waiting: document.getElementById('colorWaiting').value,
+          disconnected: '#71717a',
+        },
+        blinkStyle: document.getElementById('blinkStyle').value,
+        blinkIntervalMs: parseInt(document.getElementById('blinkIntervalMs').value) || 500,
+        actions: {
+          idle: document.getElementById('actionIdle').value,
+          working: document.getElementById('actionWorking').value,
+          waiting: document.getElementById('actionWaiting').value,
+        },
+        serverUrl: document.getElementById('serverUrl').value,
+      };
+      if (websocket) {
+        websocket.send(JSON.stringify({ event: 'setSettings', context: pluginUUID, payload: settings }));
+      }
+    }
+
+    async function loadProjects() {
+      var serverUrl = document.getElementById('serverUrl').value || 'http://localhost:24462';
+      try {
+        var response = await fetch(serverUrl + '/api/projects');
+        var projects = await response.json();
+        var select = document.getElementById('projectPath');
+        while (select.options.length > 1) select.remove(1);
+        projects.forEach(function(p) {
+          var opt = document.createElement('option');
+          opt.value = p.path;
+          opt.text = p.name;
+          select.add(opt);
+        });
+        if (settings.projectPath) select.value = settings.projectPath;
+      } catch (e) { console.error('Failed to load projects:', e); }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('input, select').forEach(function(el) {
+        el.addEventListener('change', saveSettings);
+      });
+    });
+  </script>
+</body>
+</html>
