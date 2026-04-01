@@ -10,10 +10,15 @@ import type { FileWatcher } from './FileWatcher';
 import type { SessionActivityState, SessionState } from '@shared/types/streamdeck';
 
 const DEBOUNCE_MS = 200;
+/** How long a file must be quiet before we consider it "waiting for input" */
+const WAITING_SETTLE_MS = 3000;
 
 export class SessionStateTracker extends EventEmitter {
   private states = new Map<string, SessionState>();
   private debounceTimers = new Map<string, NodeJS.Timeout>();
+  private waitingTimers = new Map<string, NodeJS.Timeout>();
+  /** Tracks the last time each session's file was modified */
+  private lastFileChange = new Map<string, number>();
   private disposed = false;
 
   constructor(
@@ -30,9 +35,6 @@ export class SessionStateTracker extends EventEmitter {
     });
   }
 
-  /**
-   * Scan all projects and sessions to build initial state map.
-   */
   private async performInitialScan(): Promise<void> {
     try {
       const projects = await this.projectScanner.scan();
@@ -92,6 +94,16 @@ export class SessionStateTracker extends EventEmitter {
       return;
     }
 
+    // Record file modification time
+    this.lastFileChange.set(event.sessionId, Date.now());
+
+    // Cancel any pending waiting-for-input timer (file just changed = still active)
+    const waitingTimer = this.waitingTimers.get(event.sessionId);
+    if (waitingTimer) {
+      clearTimeout(waitingTimer);
+      this.waitingTimers.delete(event.sessionId);
+    }
+
     // Debounce per session
     const existing = this.debounceTimers.get(event.sessionId);
     if (existing) clearTimeout(existing);
@@ -111,7 +123,6 @@ export class SessionStateTracker extends EventEmitter {
     if (this.disposed) return;
 
     try {
-      // Resolve projectId if not provided
       let resolvedProjectId = projectId;
       if (!resolvedProjectId) {
         const projects = await this.projectScanner.scan();
@@ -121,16 +132,40 @@ export class SessionStateTracker extends EventEmitter {
 
       if (!resolvedProjectId) return;
 
-      // Parse the session to get messages
       const parsedSession = await this.sessionParser.parseSession(resolvedProjectId, sessionId);
-      const state = this.detectActivityState(parsedSession.messages);
+      let state = this.detectActivityState(parsedSession.messages);
 
-      // Get project info
+      // If the raw state is waiting-for-input but the file was just modified,
+      // the tool is still executing — report as "working" and schedule a
+      // delayed re-check to see if it settles into waiting-for-input.
+      if (state === 'waiting-for-input') {
+        const lastChange = this.lastFileChange.get(sessionId) ?? 0;
+        const timeSinceChange = Date.now() - lastChange;
+
+        if (timeSinceChange < WAITING_SETTLE_MS) {
+          // File was recently modified — tool is still executing
+          state = 'working';
+
+          // Schedule a re-check after the settle period
+          if (!this.waitingTimers.has(sessionId)) {
+            this.waitingTimers.set(
+              sessionId,
+              setTimeout(
+                () => {
+                  this.waitingTimers.delete(sessionId);
+                  this.updateSessionState(sessionId, resolvedProjectId).catch(() => {});
+                },
+                WAITING_SETTLE_MS - timeSinceChange + 100
+              )
+            );
+          }
+        }
+      }
+
       const project = await this.projectScanner.getProject(resolvedProjectId);
       const projectPath = project?.path ?? '';
       const projectName = project?.name ?? 'Unknown';
 
-      // Count active sessions in the same project
       const activeInProject = [...this.states.values()].filter(
         (s) => s.projectPath === projectPath && s.sessionId !== sessionId && s.state !== 'idle'
       ).length;
@@ -146,18 +181,23 @@ export class SessionStateTracker extends EventEmitter {
         updatedAt: Date.now(),
       };
 
+      // Always update the state map; only emit when state changes
+      this.states.set(sessionId, next);
       if (prev?.state !== next.state) {
-        this.states.set(sessionId, next);
         this.emit('state-change', this.getStates());
-      } else {
-        this.states.set(sessionId, next);
       }
-    } catch (err) {
+    } catch {
       // Session may have been deleted or be unparseable — skip silently
     }
   }
 
   private removeSession(sessionId: string): void {
+    const waitingTimer = this.waitingTimers.get(sessionId);
+    if (waitingTimer) {
+      clearTimeout(waitingTimer);
+      this.waitingTimers.delete(sessionId);
+    }
+    this.lastFileChange.delete(sessionId);
     const had = this.states.delete(sessionId);
     if (had) {
       this.emit('state-change', this.getStates());
@@ -173,7 +213,12 @@ export class SessionStateTracker extends EventEmitter {
     for (const timer of this.debounceTimers.values()) {
       clearTimeout(timer);
     }
+    for (const timer of this.waitingTimers.values()) {
+      clearTimeout(timer);
+    }
     this.debounceTimers.clear();
+    this.waitingTimers.clear();
+    this.lastFileChange.clear();
     this.states.clear();
     this.removeAllListeners();
   }
