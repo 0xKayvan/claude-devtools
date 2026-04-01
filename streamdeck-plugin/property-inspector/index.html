@@ -162,7 +162,13 @@
         projects.forEach(function(p) {
           var opt = document.createElement('option');
           opt.value = p.path;
-          opt.text = p.name;
+          // Show last 2-3 meaningful path segments for disambiguation
+          var parts = p.path.replace(/\/+$/, '').split('/').filter(function(s) { return s; });
+          var home = '/Users/' + parts[1]; // e.g. /Users/kayvan
+          var rel = p.path.startsWith(home) ? parts.slice(2) : parts;
+          // Show last 2 segments, or 3 if the name alone is very short
+          var depth = p.name.length <= 4 ? 3 : 2;
+          opt.text = rel.slice(-depth).join('/');
           select.add(opt);
         });
         if (settings.projectPath) select.value = settings.projectPath;
