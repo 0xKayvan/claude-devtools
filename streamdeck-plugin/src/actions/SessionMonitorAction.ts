@@ -1,6 +1,5 @@
-// streamdeck-plugin/src/actions/SessionMonitorAction.ts
 import type { StateTransport } from '../transport/StateTransport.js';
-import type { KeyRenderer, RenderOptions } from '../rendering/KeyRenderer.js';
+import type { KeyRenderer } from '../rendering/KeyRenderer.js';
 import { BlinkController } from '../rendering/BlinkController.js';
 import type { KeySettings, SessionState, SessionActivityState } from '../config/defaults.js';
 import { DEFAULT_KEY_SETTINGS } from '../config/defaults.js';
@@ -12,6 +11,9 @@ interface ActionContext {
   showAlert(): void;
 }
 
+/** Number of consecutive polls with unchanged updatedAt before we trust waiting-for-input */
+const WAITING_CONFIRM_POLLS = 2;
+
 export class SessionMonitorAction {
   private context: ActionContext | null = null;
   private settings: KeySettings = DEFAULT_KEY_SETTINGS;
@@ -19,6 +21,10 @@ export class SessionMonitorAction {
   private boundSession: SessionState | null = null;
   private blinkController = new BlinkController();
   private lastRenderedImage = '';
+  /** Track previous updatedAt to detect activity */
+  private lastSeenUpdatedAt = 0;
+  /** How many consecutive polls the updatedAt has been stable */
+  private stablePolls = 0;
 
   constructor(
     private readonly transport: StateTransport,
@@ -40,7 +46,7 @@ export class SessionMonitorAction {
   async onKeyDown(): Promise<void> {
     if (!this.boundSession) return;
 
-    const state = this.boundSession.state;
+    const state = this.getEffectiveState();
     const actionMap = this.settings.actions;
     const action = actionMap[state === 'waiting-for-input' ? 'waiting' : state];
 
@@ -76,6 +82,8 @@ export class SessionMonitorAction {
 
     if (matching.length === 0) {
       this.boundSession = null;
+      this.lastSeenUpdatedAt = 0;
+      this.stablePolls = 0;
       return;
     }
 
@@ -87,6 +95,32 @@ export class SessionMonitorAction {
       ...this.boundSession,
       sessionCount: matching.length,
     };
+
+    // Track updatedAt changes to detect activity
+    if (this.boundSession.updatedAt !== this.lastSeenUpdatedAt) {
+      this.lastSeenUpdatedAt = this.boundSession.updatedAt;
+      this.stablePolls = 0;
+    } else {
+      this.stablePolls++;
+    }
+  }
+
+  /**
+   * Determine the effective display state.
+   * If the server says waiting-for-input but updatedAt is still changing,
+   * the session is actively working (tool executing, not truly waiting).
+   */
+  private getEffectiveState(): SessionActivityState {
+    if (!this.boundSession) return 'idle';
+
+    const serverState = this.boundSession.state;
+
+    if (serverState === 'waiting-for-input' && this.stablePolls < WAITING_CONFIRM_POLLS) {
+      // updatedAt was recently changing — session is still active
+      return 'working';
+    }
+
+    return serverState;
   }
 
   private updateDisplay(): void {
@@ -96,13 +130,14 @@ export class SessionMonitorAction {
       return;
     }
 
-    const { state, projectName, sessionCount } = this.boundSession;
+    const effectiveState = this.getEffectiveState();
+    const { projectName, sessionCount } = this.boundSession;
 
-    if (state === 'waiting-for-input') {
+    if (effectiveState === 'waiting-for-input') {
       this.startBlinking(projectName, sessionCount);
     } else {
       this.blinkController.stop();
-      this.renderKey(state, projectName, sessionCount);
+      this.renderKey(effectiveState, projectName, sessionCount);
     }
   }
 

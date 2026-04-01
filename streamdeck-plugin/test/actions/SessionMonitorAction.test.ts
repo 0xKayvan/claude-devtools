@@ -149,7 +149,7 @@ describe('SessionMonitorAction', () => {
     expect(transport.sendAction).toHaveBeenCalledWith('session-1', 'open-devtools');
   });
 
-  it('should send waiting action when state is waiting-for-input', async () => {
+  it('should send waiting action when state is waiting-for-input and stable', async () => {
     const transport = createMockTransport();
     const renderer = createMockRenderer();
     const context = createMockActionContext();
@@ -158,16 +158,21 @@ describe('SessionMonitorAction', () => {
     action.setContext(context as any);
     action.setSettings({ ...DEFAULT_KEY_SETTINGS, projectPath: '/test/project' });
 
-    transport._emitState([
+    const stableState = [
       {
         sessionId: 'session-1',
         projectPath: '/test/project',
         projectName: 'test-project',
-        state: 'waiting-for-input',
+        state: 'waiting-for-input' as const,
         sessionCount: 1,
-        updatedAt: Date.now(),
+        updatedAt: 1000, // fixed timestamp — same across polls
       },
-    ]);
+    ];
+
+    // Emit multiple times with same updatedAt to reach stablePolls threshold
+    transport._emitState(stableState);
+    transport._emitState(stableState);
+    transport._emitState(stableState);
 
     await action.onKeyDown();
 
