@@ -82,6 +82,7 @@ export class SessionMonitorAction {
   private handleConnectionChange(connected: boolean): void {
     if (!connected) {
       this.boundSession = null;
+      this.blinkController.stop();
       this.renderKey('disconnected', 'offline', 0);
     }
   }
