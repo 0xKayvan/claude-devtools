@@ -190,17 +190,20 @@ function handleAction(
 
             const tabIndex = tabTtys.indexOf(targetTty);
             if (tabIndex >= 0) {
-              // Delay slightly to let Ghostty activate first
-              setTimeout(() => {
-                try {
-                  execSync(
-                    `osascript -e 'tell application "Ghostty" to tell first window to set selected of tab ${tabIndex + 1} to true'`,
-                    { timeout: 3000 }
-                  );
-                } catch {
-                  /* tab switch failed — Ghostty is at least in front */
-                }
-              }, 200);
+              // Use Cmd+N keyboard shortcut to switch tabs (1-indexed, max 9)
+              const tabNum = tabIndex + 1;
+              if (tabNum <= 9) {
+                setTimeout(() => {
+                  try {
+                    execSync(
+                      `osascript -e 'tell application "Ghostty" to activate' -e 'delay 0.1' -e 'tell application "System Events" to keystroke "${tabNum}" using command down'`,
+                      { timeout: 3000 }
+                    );
+                  } catch {
+                    /* tab switch failed */
+                  }
+                }, 200);
+              }
             }
           }
         } catch {
