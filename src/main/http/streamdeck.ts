@@ -18,7 +18,7 @@ const WS_PING_INTERVAL_MS = 30_000;
 
 export interface StreamDeckRouteServices {
   sessionStateTracker: SessionStateTracker;
-  mainWindow: BrowserWindow | null;
+  getMainWindow: () => BrowserWindow | null;
 }
 
 export function registerStreamDeckRoutes(
@@ -119,9 +119,9 @@ function handleAction(
   }
 
   if (action === 'open-devtools') {
-    const mainWindow = services.mainWindow;
+    const mainWindow = services.getMainWindow();
     if (mainWindow) {
-      mainWindow.webContents.send('navigate-to-session', sessionId);
+      mainWindow.show();
       mainWindow.focus();
     }
     return { success: true };

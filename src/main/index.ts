@@ -360,7 +360,7 @@ async function startHttpServer(
         updaterService,
         sshConnectionManager,
         sessionStateTracker: activeContext.sessionStateTracker,
-        mainWindow,
+        getMainWindow: () => mainWindow,
       },
       modeSwitchHandler,
       config.httpServer?.port ?? 3456

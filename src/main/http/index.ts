@@ -44,7 +44,7 @@ export interface HttpServices {
   updaterService: UpdaterService;
   sshConnectionManager: SshConnectionManager;
   sessionStateTracker: SessionStateTracker;
-  mainWindow: BrowserWindow | null;
+  getMainWindow: () => BrowserWindow | null;
 }
 
 export function registerHttpRoutes(
@@ -65,7 +65,7 @@ export function registerHttpRoutes(
   registerEventRoutes(app);
   registerStreamDeckRoutes(app, {
     sessionStateTracker: services.sessionStateTracker,
-    mainWindow: services.mainWindow,
+    getMainWindow: services.getMainWindow,
   });
 
   logger.info('All HTTP routes registered');
