@@ -46,14 +46,32 @@ export class SessionStateTracker extends EventEmitter {
       if (msg.type !== 'assistant') continue;
 
       if (msg.toolCalls && msg.toolCalls.length > 0) {
-        const pendingToolCalls = msg.toolCalls.filter((tc) => {
+        // Tools that don't require user input — they're internal orchestration
+        const INTERNAL_TOOLS = new Set([
+          'Task',
+          'TaskCreate',
+          'TaskUpdate',
+          'TaskGet',
+          'TaskList',
+          'TaskStop',
+          'Agent',
+          'SendMessage',
+          'TeamCreate',
+          'TeamDelete',
+          'EnterPlanMode',
+          'ExitPlanMode',
+        ]);
+
+        const pendingUserTools = msg.toolCalls.filter((tc) => {
+          // Skip internal tools — they never wait for user input
+          if (INTERNAL_TOOLS.has(tc.name)) return false;
           const hasResult = messages
             .slice(i + 1)
             .some((subsequent) => subsequent.toolResults?.some((tr) => tr.toolUseId === tc.id));
           return !hasResult;
         });
 
-        if (pendingToolCalls.length > 0) {
+        if (pendingUserTools.length > 0) {
           return 'waiting-for-input';
         }
       }
