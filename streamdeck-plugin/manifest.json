@@ -1,11 +1,16 @@
 {
+  "UUID": "dev.nouri.tools.claude-devtools",
   "Name": "Claude Devtools",
   "Version": "0.1.0",
-  "Author": "claude-devtools",
+  "Author": "Kayvan Nouri",
   "Description": "Monitor Claude Code sessions with real-time status on your StreamDeck keys",
   "Category": "Developer Tools",
+  "CategoryIcon": "assets/icons/plugin-icon",
   "Icon": "assets/icons/plugin-icon",
-  "CodePath": "dist/plugin.js",
+  "CodePath": "plugin.js",
+  "Nodejs": {
+    "Version": "20"
+  },
   "OS": [
     { "Platform": "mac", "MinimumVersion": "10.15" },
     { "Platform": "windows", "MinimumVersion": "10" }
