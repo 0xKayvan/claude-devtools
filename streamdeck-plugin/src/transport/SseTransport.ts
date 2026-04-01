@@ -1,3 +1,4 @@
+import http from 'node:http';
 import WebSocket from 'ws';
 import type { StateTransport, ActionResult } from './StateTransport.js';
 import type { SessionState } from '../config/defaults.js';
@@ -50,11 +51,43 @@ export class SseTransport implements StateTransport {
   }
 
   async sendAction(sessionId: string, action: string): Promise<ActionResult> {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'action', sessionId, action }));
-      return { success: true };
+    // Use HTTP POST for actions — more reliable than WS fire-and-forget
+    try {
+      return await new Promise((resolve) => {
+        const body = JSON.stringify({ sessionId, action });
+        const url = new URL(`${this.baseUrl}/api/streamdeck/action`);
+        const req = http.request(
+          {
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+            },
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => {
+              data += chunk;
+            });
+            res.on('end', () => {
+              try {
+                resolve(JSON.parse(data));
+              } catch {
+                resolve({ success: false, error: 'parse error' });
+              }
+            });
+          }
+        );
+        req.on('error', (err) => resolve({ success: false, error: String(err) }));
+        req.write(body);
+        req.end();
+      });
+    } catch {
+      return { success: false, error: 'Not connected' };
     }
-    return { success: false, error: 'Not connected' };
   }
 
   isConnected(): boolean {

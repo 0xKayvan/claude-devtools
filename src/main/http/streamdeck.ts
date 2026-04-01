@@ -57,11 +57,13 @@ export function registerStreamDeckRoutes(
     ws.on('message', (raw: Buffer | string) => {
       try {
         const msg = JSON.parse(raw.toString());
+        console.log('[StreamDeck WS] Received message:', msg.type, msg.action ?? '');
         if (msg.type === 'action') {
-          handleAction(msg, services);
+          const result = handleAction(msg, services);
+          console.log('[StreamDeck WS] Action result:', JSON.stringify(result));
         }
-      } catch {
-        // Ignore malformed messages
+      } catch (err) {
+        console.error('[StreamDeck WS] Message parse error:', err);
       }
     });
 
