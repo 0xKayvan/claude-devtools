@@ -24,6 +24,7 @@ import { createLogger } from '@shared/utils/logger';
 
 import { DataCache } from './DataCache';
 import { FileWatcher } from './FileWatcher';
+import { type SessionStateTracker } from './SessionStateTracker';
 
 import type { FileSystemProvider } from './FileSystemProvider';
 
@@ -74,6 +75,7 @@ export class ServiceContext {
   readonly chunkBuilder: ChunkBuilder;
   readonly dataCache: DataCache;
   readonly fileWatcher: FileWatcher;
+  readonly sessionStateTracker: SessionStateTracker;
 
   private cleanupInterval: NodeJS.Timeout | null = null;
   private disposed = false;
@@ -115,6 +117,13 @@ export class ServiceContext {
       config.fsProvider
     );
     this.fileWatcher.setProjectScanner(this.projectScanner);
+
+    // 7. SessionStateTracker - depends on FileWatcher, SessionParser, and ProjectScanner
+    this.sessionStateTracker = new SessionStateTracker(
+      this.fileWatcher,
+      this.sessionParser,
+      this.projectScanner
+    );
 
     logger.info(`ServiceContext created: ${config.id}`);
   }
@@ -174,6 +183,9 @@ export class ServiceContext {
 
     // Stop and dispose FileWatcher
     this.fileWatcher.dispose();
+
+    // Dispose SessionStateTracker
+    this.sessionStateTracker.dispose();
 
     // Dispose DataCache
     this.dataCache.dispose();
