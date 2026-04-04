@@ -3,6 +3,7 @@ import React from 'react';
 import { CopyButton } from '@renderer/components/common/CopyButton';
 import { PROSE_BODY } from '@renderer/constants/cssVariables';
 
+import { MermaidViewer } from './viewers/MermaidViewer';
 import { highlightSearchInChildren, type SearchContext } from './searchHighlightUtils';
 
 import type { Components } from 'react-markdown';
@@ -119,6 +120,13 @@ export function createMarkdownComponents(searchCtx: SearchContext | null): Compo
       const isBlock = (hasLanguageClass ?? false) || isMultiLine;
 
       if (isBlock) {
+        const lang = className?.replace('language-', '') ?? '';
+        const text = content.replace(/\n$/, '');
+
+        if (lang === 'mermaid') {
+          return <MermaidViewer code={text} />;
+        }
+
         return (
           <code className="block font-mono text-xs" style={{ color: 'var(--color-text)' }}>
             {hl(children)}
@@ -139,8 +147,13 @@ export function createMarkdownComponents(searchCtx: SearchContext | null): Compo
       );
     },
 
-    // Code blocks — with copy button
+    // Code blocks — skip <pre> wrapper for mermaid diagrams, with copy button
     pre: ({ children }) => {
+      const child = React.Children.only(children) as React.ReactElement;
+      if (child?.type === MermaidViewer) {
+        return children as React.ReactElement;
+      }
+
       // Extract text from nested <code> children for the copy button
       const extractText = (node: React.ReactNode): string => {
         if (typeof node === 'string') return node;
