@@ -1,8 +1,12 @@
 import React from 'react';
 
+import { api } from '@renderer/api';
 import { CopyButton } from '@renderer/components/common/CopyButton';
 import { PROSE_BODY } from '@renderer/constants/cssVariables';
 
+const MermaidViewer = React.lazy(() =>
+  import('./viewers/MermaidViewer').then((m) => ({ default: m.MermaidViewer }))
+);
 import { highlightSearchInChildren, type SearchContext } from './searchHighlightUtils';
 
 import type { Components } from 'react-markdown';
@@ -77,14 +81,18 @@ export function createMarkdownComponents(searchCtx: SearchContext | null): Compo
       </p>
     ),
 
-    // Links — inline element, no hl(); parent block element's hl() descends here
+    // Links — open in system browser via IPC, not in Electron window
     a: ({ href, children }) => (
       <a
         href={href}
-        className="no-underline hover:underline"
+        className="cursor-pointer no-underline hover:underline"
         style={{ color: 'var(--prose-link)' }}
-        target="_blank"
-        rel="noopener noreferrer"
+        onClick={(e) => {
+          e.preventDefault();
+          if (href) {
+            void api.openExternal(href);
+          }
+        }}
       >
         {children}
       </a>
@@ -119,6 +127,17 @@ export function createMarkdownComponents(searchCtx: SearchContext | null): Compo
       const isBlock = (hasLanguageClass ?? false) || isMultiLine;
 
       if (isBlock) {
+        const lang = className?.replace('language-', '') ?? '';
+        const text = content.replace(/\n$/, '');
+
+        if (lang === 'mermaid') {
+          return (
+            <React.Suspense fallback={<code className="block font-mono text-xs">{text}</code>}>
+              <MermaidViewer code={text} />
+            </React.Suspense>
+          );
+        }
+
         return (
           <code className="block font-mono text-xs" style={{ color: 'var(--color-text)' }}>
             {hl(children)}
@@ -139,14 +158,23 @@ export function createMarkdownComponents(searchCtx: SearchContext | null): Compo
       );
     },
 
-    // Code blocks — with copy button
-    pre: ({ children }) => {
+    // Code blocks — skip <pre> wrapper for mermaid diagrams, with copy button
+    pre: ({ children, node }) => {
+      // Detect mermaid: check if the <code> child has class "language-mermaid"
+      const codeEl = node?.children?.find((c) => 'tagName' in c && c.tagName === 'code') as
+        | { properties?: { className?: string[] } }
+        | undefined;
+      const isMermaid = codeEl?.properties?.className?.includes('language-mermaid');
+      if (isMermaid) {
+        return children as React.ReactElement;
+      }
+
       // Extract text from nested <code> children for the copy button
-      const extractText = (node: React.ReactNode): string => {
-        if (typeof node === 'string') return node;
-        if (Array.isArray(node)) return node.map(extractText).join('');
-        if (React.isValidElement(node) && node.props) {
-          const props = node.props as { children?: React.ReactNode };
+      const extractText = (child: React.ReactNode): string => {
+        if (typeof child === 'string') return child;
+        if (Array.isArray(child)) return child.map(extractText).join('');
+        if (React.isValidElement(child) && child.props) {
+          const props = child.props as { children?: React.ReactNode };
           return extractText(props.children);
         }
         return '';

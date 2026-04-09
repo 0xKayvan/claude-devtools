@@ -397,6 +397,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-surface);
   color: var(--color-text);
+}
+
+/* Theme transition — scoped to explicit toggle to avoid tracking transition state
+   on every repaint. Applied by useTheme hook when toggling light/dark. */
+body.theme-transitioning {
   transition:
     background-color 0.2s ease,
     color 0.2s ease;

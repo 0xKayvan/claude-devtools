@@ -82,15 +82,25 @@ export function useTheme(): {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [configuredTheme, getSystemTheme]);
 
-  // Apply theme class to document root
+  // Apply theme class to document root with scoped transition
   useEffect(() => {
     const root = document.documentElement;
+
+    // Enable transition only during explicit theme toggle
+    document.body.classList.add('theme-transitioning');
 
     // Remove existing theme classes
     root.classList.remove('dark', 'light');
 
     // Add new theme class
     root.classList.add(resolvedTheme);
+
+    // Remove transition class after animation completes to avoid tracking
+    // transition state on every repaint (perf: macOS Chromium compositor)
+    const timer = setTimeout(() => {
+      document.body.classList.remove('theme-transitioning');
+    }, 250);
+    return () => clearTimeout(timer);
   }, [resolvedTheme]);
 
   return {

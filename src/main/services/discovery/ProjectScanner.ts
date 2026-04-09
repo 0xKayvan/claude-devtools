@@ -16,6 +16,8 @@
  */
 
 import {
+  type FindSessionByIdResult,
+  type FindSessionsByPartialIdResult,
   type PaginatedSessionsResult,
   type Project,
   type RepositoryGroup,
@@ -1050,6 +1052,23 @@ export class ProjectScanner {
   }
 
   /**
+   * Invalidate internal caches for a project.
+   * Called by FileWatcher when session files change so stale cache entries
+   * (e.g. sessions previously flagged as empty) are re-evaluated.
+   */
+  invalidateCachesForProject(projectId: string): void {
+    // projectId is URL-encoded; the cache keys are absolute file paths containing the decoded dir
+    const decoded = decodeURIComponent(projectId);
+    const prefix = path.join(this.projectsDir, decoded);
+    for (const key of this.contentPresenceCache.keys()) {
+      if (key.startsWith(prefix)) this.contentPresenceCache.delete(key);
+    }
+    for (const key of this.sessionMetadataCache.keys()) {
+      if (key.startsWith(prefix)) this.sessionMetadataCache.delete(key);
+    }
+  }
+
+  /**
    * Checks if the projects directory exists.
    */
   async projectsDirExists(): Promise<boolean> {
@@ -1150,6 +1169,120 @@ export class ProjectScanner {
     } catch (error) {
       logger.error('Error searching all projects:', error);
       return { results: [], totalMatches: 0, sessionsSearched: 0, query };
+    }
+  }
+
+  /**
+   * Finds a session by its UUID across all projects.
+   * Scans all project directories for a matching .jsonl file.
+   *
+   * @param sessionId - UUID of the session to find
+   * @returns FindSessionByIdResult with projectId and session metadata if found
+   */
+  async findSessionById(sessionId: string): Promise<FindSessionByIdResult> {
+    try {
+      const entries = await this.fsProvider.readdir(this.projectsDir).catch(() => []);
+      const projectDirs = entries.filter(
+        (entry) => entry.isDirectory() && isValidEncodedPath(entry.name)
+      );
+
+      // Check project directories in parallel batches for the session file
+      const matches = await this.collectFulfilledInBatches(
+        projectDirs,
+        this.fsProvider.type === 'ssh' ? 8 : 24,
+        async (dir) => {
+          const sessionPath = buildSessionPath(this.projectsDir, dir.name, sessionId);
+          if (await this.fsProvider.exists(sessionPath)) {
+            return dir.name;
+          }
+          return null;
+        }
+      );
+
+      const matchedProjectId = matches.find((m) => m !== null);
+      if (matchedProjectId) {
+        const session = await this.getSessionWithOptions(matchedProjectId, sessionId, {
+          metadataLevel: 'light',
+        });
+        if (session) {
+          return { found: true, projectId: matchedProjectId, session };
+        }
+      }
+
+      return { found: false };
+    } catch (error) {
+      logger.error(`Error finding session by ID ${sessionId}:`, error);
+      return { found: false };
+    }
+  }
+
+  /**
+   * Finds sessions whose IDs contain the given fragment (case-insensitive).
+   * Scans all project directories in parallel and returns matches sorted by recency.
+   *
+   * @param fragment - Partial session ID fragment (min 3 chars, hex-dash chars only)
+   * @returns FindSessionsByPartialIdResult with matching sessions sorted by createdAt desc
+   */
+  async findSessionsByPartialId(
+    fragment: string,
+    maxResults: number = 50
+  ): Promise<FindSessionsByPartialIdResult> {
+    try {
+      const lowerFragment = fragment.toLowerCase();
+      const entries = await this.fsProvider.readdir(this.projectsDir).catch(() => []);
+      const projectDirs = entries.filter(
+        (entry) => entry.isDirectory() && isValidEncodedPath(entry.name)
+      );
+
+      // Scan all project dirs in parallel, collecting matching session filenames
+      const perProjectMatches = await this.collectFulfilledInBatches(
+        projectDirs,
+        this.fsProvider.type === 'ssh' ? 8 : 24,
+        async (dir) => {
+          const projectPath = path.join(this.projectsDir, dir.name);
+          const sessionEntries = await this.fsProvider.readdir(projectPath);
+          const matchingIds = sessionEntries
+            .filter(
+              (e) => e.name.endsWith('.jsonl') && e.name.toLowerCase().includes(lowerFragment)
+            )
+            .map((e) => extractSessionId(e.name));
+          return { projectId: dir.name, sessionIds: matchingIds };
+        }
+      );
+
+      // Flatten and cap filename matches before loading metadata
+      const allMatches: { projectId: string; sessionId: string }[] = [];
+      for (const { projectId, sessionIds } of perProjectMatches) {
+        for (const sessionId of sessionIds) {
+          allMatches.push({ projectId, sessionId });
+          if (allMatches.length >= maxResults) break;
+        }
+        if (allMatches.length >= maxResults) break;
+      }
+
+      if (allMatches.length === 0) {
+        return { found: false, results: [] };
+      }
+
+      const sessions = await this.collectFulfilledInBatches(
+        allMatches,
+        this.fsProvider.type === 'ssh' ? 4 : 16,
+        async (match) => {
+          const session = await this.getSessionWithOptions(match.projectId, match.sessionId, {
+            metadataLevel: 'light',
+          });
+          return session ? { projectId: match.projectId, session } : null;
+        }
+      );
+
+      const results = sessions
+        .filter((s): s is { projectId: string; session: Session } => s !== null)
+        .sort((a, b) => b.session.createdAt - a.session.createdAt);
+
+      return { found: results.length > 0, results };
+    } catch (error) {
+      logger.error(`Error finding sessions by partial ID ${fragment}:`, error);
+      return { found: false, results: [] };
     }
   }
 

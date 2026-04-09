@@ -254,7 +254,7 @@ const DEFAULT_CONFIG: AppConfig = {
   general: {
     launchAtLogin: false,
     showDockIcon: true,
-    theme: 'dark',
+    theme: 'system',
     defaultTab: 'dashboard',
     claudeRootPath: null,
     autoExpandAIGroups: false,
@@ -368,8 +368,8 @@ export class ConfigManager {
    */
   static async initializeInstance(configPath?: string): Promise<ConfigManager> {
     const instance = new ConfigManager(configPath);
-    await instance.initialize();
     ConfigManager.instance = instance;
+    await instance.initialize();
     return instance;
   }
 

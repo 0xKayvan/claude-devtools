@@ -7,6 +7,8 @@ import {
   CONTEXT_GET_ACTIVE,
   CONTEXT_LIST,
   CONTEXT_SWITCH,
+  FIND_SESSION_BY_ID,
+  FIND_SESSIONS_BY_PARTIAL_ID,
   HTTP_SERVER_GET_STATUS,
   HTTP_SERVER_START,
   HTTP_SERVER_STOP,
@@ -139,9 +141,9 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('search-sessions', projectId, query, maxResults),
   searchAllProjects: (query: string, maxResults?: number) =>
     ipcRenderer.invoke('search-all-projects', query, maxResults),
-  findSessionById: (sessionId: string) => ipcRenderer.invoke('find-session-by-id', sessionId),
+  findSessionById: (sessionId: string) => ipcRenderer.invoke(FIND_SESSION_BY_ID, sessionId),
   findSessionsByPartialId: (fragment: string) =>
-    ipcRenderer.invoke('find-sessions-by-partial-id', fragment),
+    ipcRenderer.invoke(FIND_SESSIONS_BY_PARTIAL_ID, fragment),
   getSessionDetail: (projectId: string, sessionId: string) =>
     ipcRenderer.invoke('get-session-detail', projectId, sessionId),
   getSessionMetrics: (projectId: string, sessionId: string) =>

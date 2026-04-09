@@ -89,10 +89,11 @@ export const TabBar = ({ paneId }: TabBarProps): React.JSX.Element => {
   // Derive stable tab IDs array for SortableContext
   const tabIds = useMemo(() => openTabs.map((t) => t.id), [openTabs]);
 
-  // Derive session detail for the active tab (used by export dropdown)
-  const activeTabSessionDetail = activeTabId
-    ? (tabSessionData[activeTabId]?.sessionDetail ?? null)
-    : null;
+  // Whether the active tab has session data loaded (for export menu visibility).
+  // We no longer pass full sessionDetail here — export re-fetches on demand to save memory.
+  const activeTabHasSession = activeTabId
+    ? tabSessionData[activeTabId]?.sessionDetail != null
+    : false;
 
   // Hover states for buttons
   const [expandHover, setExpandHover] = useState(false);
@@ -104,6 +105,7 @@ export const TabBar = ({ paneId }: TabBarProps): React.JSX.Element => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(
     null
   );
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
 
   // Track last clicked tab for Shift range selection
   const lastClickedTabIdRef = useRef<string | null>(null);
@@ -260,9 +262,11 @@ export const TabBar = ({ paneId }: TabBarProps): React.JSX.Element => {
         {
           height: `${HEADER_ROW1_HEIGHT}px`,
           paddingLeft:
-            sidebarCollapsed && isLeftmostPane
+            sidebarCollapsed && isLeftmostPane && navigator.userAgent.includes('Macintosh')
               ? 'var(--macos-traffic-light-padding-left, 72px)'
-              : '8px',
+              : sidebarCollapsed && isLeftmostPane
+                ? '4px'
+                : '8px',
           WebkitAppRegion: isElectronMode() && isLeftmostPane ? 'drag' : undefined,
           backgroundColor: 'var(--color-surface)',
           borderBottom: '1px solid var(--color-border)',
@@ -315,6 +319,9 @@ export const TabBar = ({ paneId }: TabBarProps): React.JSX.Element => {
               paneId={paneId}
               isActive={tab.id === activeTabId}
               isSelected={selectedSet.has(tab.id)}
+              isRenameRequested={renamingTabId === tab.id}
+              onRenameComplete={() => setRenamingTabId(null)}
+              onRequestRename={(id) => setRenamingTabId(id)}
               onTabClick={handleTabClick}
               onMouseDown={handleMouseDown}
               onContextMenu={handleContextMenu}
@@ -395,7 +402,7 @@ export const TabBar = ({ paneId }: TabBarProps): React.JSX.Element => {
         </button>
 
         {/* More menu (Search, Export, Settings) */}
-        <MoreMenu activeTab={activeTab} activeTabSessionDetail={activeTabSessionDetail} />
+        <MoreMenu activeTab={activeTab} activeTabHasSession={activeTabHasSession} />
       </div>
 
       {/* Context menu */}
@@ -429,6 +436,7 @@ export const TabBar = ({ paneId }: TabBarProps): React.JSX.Element => {
               ? () => toggleHideSession(contextMenuTab.sessionId!)
               : undefined
           }
+          onRename={() => setRenamingTabId(contextMenuTabId)}
         />
       )}
     </div>

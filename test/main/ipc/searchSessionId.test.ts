@@ -30,15 +30,6 @@ describe('find-session-by-id: guard layer (validateSessionId)', () => {
     expect(result.valid).toBe(true);
     expect(result.value).toBe('550e8400-e29b-41d4-a716-446655440000');
   });
-
-  it('accepted input produces { found: false } shape when scanner finds nothing', () => {
-    // The handler's early-exit shape on invalid input
-    const invalidResult = validateSessionId('');
-    if (!invalidResult.valid) {
-      const handlerEarlyReturn = { found: false } as const;
-      expect(handlerEarlyReturn.found).toBe(false);
-    }
-  });
 });
 
 // =============================================================================
@@ -72,14 +63,5 @@ describe('find-sessions-by-partial-id: guard layer (isSessionIdFragment)', () =>
 
   it('accepts hex fragment with dashes', () => {
     expect(isSessionIdFragment('abc-def')).toBe(true);
-  });
-
-  it('rejected input produces { found: false, results: [] } shape', () => {
-    const fragment = 'xy';
-    if (!isSessionIdFragment(fragment)) {
-      const handlerEarlyReturn = { found: false, results: [] } as const;
-      expect(handlerEarlyReturn.found).toBe(false);
-      expect(handlerEarlyReturn.results).toHaveLength(0);
-    }
   });
 });

@@ -59,6 +59,10 @@ describe('sessionIdValidator', () => {
     it('rejects an empty string', () => {
       expect(isSessionIdFragment('')).toBe(false);
     });
+
+    it('trims surrounding whitespace', () => {
+      expect(isSessionIdFragment('  abc  ')).toBe(true);
+    });
   });
 
   describe('exported constants', () => {

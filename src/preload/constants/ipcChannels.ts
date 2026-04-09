@@ -177,3 +177,13 @@ export const APP_RELAUNCH = 'app:relaunch';
 
 /** Refresh session shortcut (main → renderer, triggered by Ctrl+R / Cmd+R) */
 export const SESSION_REFRESH = 'session:refresh';
+
+// =============================================================================
+// Search API Channels
+// =============================================================================
+
+/** Find a session by its exact UUID across all projects */
+export const FIND_SESSION_BY_ID = 'find-session-by-id';
+
+/** Find sessions whose IDs contain a given hex fragment */
+export const FIND_SESSIONS_BY_PARTIAL_ID = 'find-sessions-by-partial-id';

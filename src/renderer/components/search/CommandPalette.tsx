@@ -13,9 +13,6 @@ import { api } from '@renderer/api';
 import { useStore } from '@renderer/store';
 import { formatModifierShortcut } from '@renderer/utils/keyboardUtils';
 import { createLogger } from '@shared/utils/logger';
-import { useShallow } from 'zustand/react/shallow';
-
-const logger = createLogger('Component:CommandPalette');
 import { isSessionIdFragment, isUUID } from '@shared/utils/sessionIdValidator';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -29,9 +26,12 @@ import {
   User,
   X,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { RepositoryGroup, SearchResult } from '@renderer/types/data';
 import type { FindSessionByIdResult, FindSessionsByPartialIdResult } from '@shared/types';
+
+const logger = createLogger('Component:CommandPalette');
 
 // =============================================================================
 // Search Mode Type
@@ -83,7 +83,11 @@ const SessionIdMatchItemInner = ({
         <div className="mt-1 flex items-center gap-3 text-xs text-text-muted">
           <span>{messageCount} messages</span>
           <span>&middot;</span>
-          <span>{formatDistanceToNow(new Date(createdAt), { addSuffix: true })}</span>
+          <span>
+            {createdAt > 0
+              ? formatDistanceToNow(new Date(createdAt), { addSuffix: true })
+              : 'Unknown'}
+          </span>
         </div>
         <div className="text-text-muted/60 mt-1 font-mono text-[10px]">{sessionId}</div>
       </div>
@@ -629,7 +633,7 @@ export const CommandPalette = (): React.JSX.Element | null => {
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[15vh] backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[15vh]"
       onClick={handleBackdropClick}
     >
       <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">

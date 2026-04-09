@@ -17,6 +17,7 @@ function nativeModuleStub(): Plugin {
   const STUB_ID = '\0native-stub'
   return {
     name: 'native-module-stub',
+    enforce: 'pre',
     resolveId(source) {
       if (source.endsWith('.node')) return STUB_ID
       return null

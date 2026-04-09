@@ -19,10 +19,18 @@ import {
 import { createLogger } from '@shared/utils/logger';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { existsSync } from 'fs';
+import { totalmem } from 'os';
 import { join } from 'path';
 
 import { initializeIpcHandlers, removeIpcHandlers } from './ipc/handlers';
 import { getProjectsBasePath, getTodosBasePath } from './utils/pathDecoder';
+
+// Dynamic renderer heap limit — proportional to system RAM so low-end devices
+// are not starved.  50% of total RAM, clamped to [2 GB, 4 GB].
+// Must run before app.whenReady() so the flag is picked up by the renderer.
+const totalMB = Math.floor(totalmem() / (1024 * 1024));
+const heapMB = Math.min(4096, Math.max(2048, Math.floor(totalMB * 0.5)));
+app.commandLine.appendSwitch('js-flags', `--max-old-space-size=${heapMB}`);
 
 // Window icon path for non-mac platforms.
 const getWindowIconPath = (): string | undefined => {
@@ -58,11 +66,11 @@ process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception in main process:', error);
 });
 
-import { configManagerPromise } from './services/infrastructure/ConfigManager';
 import { HttpServer } from './services/infrastructure/HttpServer';
 import { TrayManager } from './services/infrastructure/TrayManager';
 import {
   configManager,
+  configManagerPromise,
   LocalFileSystemProvider,
   NotificationManager,
   ServiceContext,
@@ -452,6 +460,7 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,
     },
     backgroundColor: '#1a1a1a',
     ...(useNativeTitleBar ? {} : { titleBarStyle: 'hidden' as const }),
@@ -575,9 +584,12 @@ function createWindow(): void {
 /**
  * Application ready handler.
  */
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   logger.info('App ready, initializing...');
   try {
+    // Wait for config to finish loading from disk before using it
+    await configManagerPromise;
+
     // Initialize services first
     initializeServices();
 
